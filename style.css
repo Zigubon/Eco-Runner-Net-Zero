@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=VT323&display=swap');
+
+:root {
+    --bg-color: #2c3e50;
+    --board-bg: #ecf0f1;
+    --primary: #27ae60;
+    --danger: #c0392b;
+    --accent: #f1c40f;
+}
+
+body {
+    background-color: var(--bg-color);
+    margin: 0;
+    display: flex; justify-content: center; align-items: center;
+    height: 100vh; font-family: 'Noto Sans KR', sans-serif;
+}
+
+/* 6x6 그리드 보드 (가운데 4x4는 비움) */
+.board {
+    display: grid;
+    grid-template-columns: repeat(6, 80px);
+    grid-template-rows: repeat(6, 80px);
+    gap: 4px;
+    background: #333;
+    padding: 8px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+/* 중앙 패널 */
+.center-panel {
+    grid-column: 2 / 6; /* 2번부터 5번까지 */
+    grid-row: 2 / 6;
+    background: #fff;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 10px;
+}
+
+/* 타일 스타일 */
+.tile {
+    background: #eee;
+    font-size: 0.7rem;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    padding: 4px; text-align: center;
+    position: relative;
+    border: 2px solid transparent;
+}
+.tile.factory { border-bottom: 4px solid var(--danger); }
+.tile.eco { border-bottom: 4px solid var(--primary); }
+.tile.start { background: #ffeaa7; }
+
+/* 플레이어 말 */
+.player-token {
+    width: 20px; height: 20px;
+    background: #2980b9; border: 2px solid #fff;
+    border-radius: 50%;
+    position: absolute; top: 5px; right: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    z-index: 10; transition: all 0.3s ease;
+}
+
+/* UI 요소들 */
+.logo { font-family: 'VT323'; font-size: 2rem; color: #333; margin-bottom: 10px; }
+.stat-item { display: flex; justify-content: space-between; width: 200px; margin: 5px 0; font-weight: bold; }
+.value { font-family: 'VT323'; font-size: 1.2rem; }
+.value.danger { color: var(--danger); }
+.dice-area { font-size: 1.5rem; margin: 15px 0; }
+.btn-primary { 
+    padding: 10px 20px; background: #333; color: #fff; 
+    border: none; border-radius: 5px; cursor: pointer; 
+}
+.btn-primary:hover { background: #555; }
+.log-box {
+    margin-top: 15px; width: 90%; height: 60px; 
+    background: #f8f9fa; border: 1px solid #ddd; 
+    overflow-y: auto; font-size: 0.75rem; text-align: left; padding: 5px;
+}

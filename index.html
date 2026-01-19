@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Marble - 넷제로 타이쿤</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="board" id="board">
+            <div class="center-panel">
+                <div class="logo">🌏 Carbon Marble</div>
+                
+                <div class="dashboard">
+                    <div class="stat-item">
+                        <span class="label">자금 (ESG펀드)</span>
+                        <span class="value" id="money">3,000k</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="label">탄소 배출량</span>
+                        <span class="value danger" id="carbon">0 t</span>
+                    </div>
+                </div>
+
+                <div class="control-box">
+                    <div class="dice-area" id="dice-display">🎲 Ready</div>
+                    <button class="btn-primary" id="roll-btn">주사위 굴리기</button>
+                </div>
+                
+                <div class="log-box" id="game-log">
+                    <p>게임이 시작되었습니다.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
