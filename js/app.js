@@ -1,240 +1,394 @@
-import { MAP_DATA, GAME_CONFIG } from './data.js';
+import { CONFIG, TILES, ASSETS, TECH_UPGRADES, OFFSETS } from './data.js';
 
-class CarbonMarble {
+class Game {
     constructor() {
-        // 게임 목표: 총 자산 10,000k 만들기
-        this.GOAL_ASSET = 10000; 
+        // [State] 플레이어 상태
+        this.turn = 1;
+        this.pos = 0;
+        this.money = CONFIG.START_MONEY;
+        this.carbonScore = 0;
+        this.reputation = 0;
+        this.carbonTaxRate = CONFIG.BASE_TAX_RATE;
+        this.assets = []; // { id, level, ...stats }
         
-        this.player = { 
-            pos: 0, 
-            money: GAME_CONFIG.START_MONEY, 
-            carbon: 0,
-            assets: [] // 보유한 타일 ID 목록
+        // Flags
+        this.flags = {
+            reported: false, // 보고 여부
+            insurance: false // 보험 여부
         };
-        
-        this.boardEl = document.getElementById('board');
-        this.logEl = document.getElementById('game-log');
-        this.rollBtn = document.getElementById('roll-btn');
-        this.controlBox = document.querySelector('.control-box');
+
+        // UI Elements
+        this.ui = {
+            board: document.getElementById('board'),
+            log: document.getElementById('game-log'),
+            modal: document.getElementById('action-modal'),
+            modalOpts: document.getElementById('modal-options'),
+            rollBtn: document.getElementById('roll-btn')
+        };
 
         this.init();
     }
 
     init() {
         this.renderBoard();
-        this.updateUI();
+        this.updateDashboard();
+        this.log("🚀 게임 시작! 12분기 동안 기업을 생존시키세요.");
         
-        if(this.rollBtn) {
-            this.rollBtn.addEventListener('click', () => this.rollDice());
-        }
-        
-        // 총 자산 표시 UI 추가 (없으면 만듦)
-        this.addTotalAssetUI();
+        this.ui.rollBtn.onclick = () => this.phaseMove();
     }
 
-    addTotalAssetUI() {
-        const dashboard = document.querySelector('.dashboard');
-        if(dashboard && !document.getElementById('total-asset')) {
-            const div = document.createElement('div');
-            div.className = 'stat-item total-asset';
-            div.innerHTML = `<span class="label">총 자산 가치</span><span class="value" id="total-asset">0k</span>`;
-            dashboard.appendChild(div);
-        }
-    }
-
+    // --- 1. 보드 렌더링 (CSS Grid 배치) ---
     renderBoard() {
-        const centerPanel = document.querySelector('.center-panel');
-        this.boardEl.innerHTML = ''; 
-        if (centerPanel) this.boardEl.appendChild(centerPanel);
+        // 중앙 영역 보존
+        const center = document.querySelector('.center-area');
+        this.ui.board.innerHTML = '';
+        this.ui.board.appendChild(center);
 
-        MAP_DATA.forEach((tile, index) => {
+        TILES.forEach((tile, idx) => {
             const el = document.createElement('div');
             el.className = `tile ${tile.type}`;
-            el.id = `tile-${index}`;
-            el.innerHTML = `
-                <div>${tile.name}</div>
-                ${tile.cost ? `<div style="font-family:'VT323'">₩${tile.cost}</div>` : ''}
-            `;
-            this.setGridPosition(el, index);
+            el.innerHTML = `<div>${tile.name}</div>`;
+            el.id = `tile-${idx}`;
             
-            if (index === 0) {
-                const token = document.createElement('div');
-                token.className = 'player-token';
-                token.id = 'player-token';
-                el.appendChild(token);
-            }
-            this.boardEl.appendChild(el);
+            // 30칸 루프 좌표 계산 (9x7 테두리)
+            // 상단(0~8), 우측(9~14), 하단(15~23), 좌측(24~29)
+            if (idx <= 8) { el.style.gridRow = 1; el.style.gridColumn = idx + 1; }
+            else if (idx <= 14) { el.style.gridRow = idx - 7; el.style.gridColumn = 9; }
+            else if (idx <= 23) { el.style.gridRow = 7; el.style.gridColumn = 9 - (idx - 15); }
+            else { el.style.gridRow = 7 - (idx - 23); el.style.gridColumn = 1; }
+
+            if (idx === 0) this.spawnToken(el);
+            this.ui.board.appendChild(el);
         });
     }
 
-    setGridPosition(el, index) {
-        if (index < 6) { el.style.gridRow = 1; el.style.gridColumn = index + 1; }
-        else if (index < 10) { el.style.gridRow = index - 4; el.style.gridColumn = 6; }
-        else if (index < 16) { el.style.gridRow = 6; el.style.gridColumn = 6 - (index - 10); }
-        else { el.style.gridRow = 6 - (index - 15); el.style.gridColumn = 1; }
+    spawnToken(parent) {
+        const token = document.createElement('div');
+        token.className = 'player-token';
+        token.id = 'p-token';
+        parent.appendChild(token);
     }
 
-    rollDice() {
-        this.clearButtons(); // 기존 버튼 청소
+    // --- 2. Phase 1: 이동 (Move) ---
+    phaseMove() {
+        this.ui.rollBtn.disabled = true;
         const dice = Math.floor(Math.random() * 6) + 1;
+        document.getElementById('dice-val').innerText = `🎲 ${dice}`;
         
-        const diceDisplay = document.getElementById('dice-display');
-        if(diceDisplay) diceDisplay.innerText = `🎲 ${dice}`;
-        
-        this.movePlayer(dice);
-    }
-
-    movePlayer(steps) {
-        const oldPos = this.player.pos;
-        this.player.pos = (this.player.pos + steps) % MAP_DATA.length;
-        
-        const targetTile = document.getElementById(`tile-${this.player.pos}`);
-        const token = document.getElementById('player-token');
-        if(targetTile && token) targetTile.appendChild(token);
-
-        // 한 바퀴 완주 체크
-        if (this.player.pos < oldPos) {
-            this.passStartLine();
+        // 이동 로직
+        let nextPos = (this.pos + dice);
+        if (nextPos >= TILES.length) {
+            nextPos %= TILES.length;
+            this.passStart(); // 한 바퀴 돔
         }
+        this.pos = nextPos;
 
-        this.handleTile(MAP_DATA[this.player.pos]);
+        // 토큰 이동 시각화
+        const targetTile = document.getElementById(`tile-${this.pos}`);
+        targetTile.appendChild(document.getElementById('p-token'));
+
+        setTimeout(() => this.phaseTileEffect(), 500);
     }
 
-    handleTile(tile) {
-        if (tile.type === 'factory' || tile.type === 'eco') {
-            if (this.player.assets.includes(tile.id)) {
-                this.log(`내 소유의 [${tile.name}]입니다.`);
-                this.showRollButton(); // 다시 주사위 굴리기
-            } else {
-                // [선택지] 매입 vs 패스
-                if (this.player.money >= tile.cost) {
-                    this.showChoice(tile);
-                } else {
-                    this.log(`자금 부족으로 [${tile.name}] 패스.`);
-                    this.showRollButton();
-                }
-            }
+    passStart() {
+        this.log("🔄 한 바퀴 완주! (특별 보너스는 없음, 정산은 매 턴 진행)");
+    }
+
+    // --- 3. Phase 2: 타일 효과 (Encounter) ---
+    phaseTileEffect() {
+        const tile = TILES[this.pos];
+        this.log(`📍 [${tile.name}] 도착`);
+
+        // 타일별 기본 이벤트 처리
+        if (tile.type === 'start') {
+            this.phaseAction(2); // 바로 액션 단계로
+        } else if (tile.type === 'market' && tile.assetId) {
+            // 자산 구매 기회
+            this.showModal(`사업 확장 기회: ${tile.name}`, `매입하시겠습니까?`, [
+                { text: `매입 (비용 ${ASSETS[tile.assetId].cost})`, cb: () => this.buyAsset(tile.assetId) },
+                { text: '패스', cb: () => this.phaseAction(2) }
+            ]);
+        } else if (tile.type === 'event') {
+            this.triggerRandomEvent();
+        } else if (tile.type === 'reg') {
+            this.triggerAudit();
         } else {
-            if (tile.type === 'chance') this.log("🔑 황금열쇠 (준비중)");
-            else if (tile.type === 'start') this.log("🚩 출발점");
-            this.showRollButton();
+            // Tech, Offset, Finance 등은 액션 단계에서 선택 가능하도록 유도
+            this.phaseAction(2);
         }
     }
 
-    // [핵심] 선택 버튼 2개 보여주기
-    showChoice(tile) {
-        this.rollBtn.style.display = 'none'; // 주사위 숨김
-        
-        const btnGroup = document.createElement('div');
-        btnGroup.className = 'btn-group';
-        btnGroup.id = 'choice-btns';
+    // --- 4. Phase 3: 경영 액션 (Management) ---
+    // ap: Action Point (기본 2회)
+    phaseAction(ap) {
+        if (ap <= 0) {
+            this.phaseSettlement();
+            return;
+        }
 
-        // 1. 매입 버튼
-        const buyBtn = document.createElement('button');
-        buyBtn.innerText = `매입 (-${tile.cost})`;
-        buyBtn.className = 'btn-primary';
-        buyBtn.style.backgroundColor = tile.type === 'factory' ? '#c0392b' : '#27ae60';
-        buyBtn.onclick = () => this.buyProperty(tile);
-
-        // 2. 패스 버튼
-        const passBtn = document.createElement('button');
-        passBtn.innerText = '패스';
-        passBtn.className = 'btn-secondary';
-        passBtn.onclick = () => this.passProperty(tile);
-
-        btnGroup.appendChild(buyBtn);
-        btnGroup.appendChild(passBtn);
-        this.controlBox.appendChild(btnGroup);
+        this.showModal(`경영 액션 선택 (남은 횟수: ${ap})`, "이번 분기에 무엇을 하시겠습니까?", [
+            { text: '🛠️ 기술 투자 (업그레이드)', cb: () => this.openTechMenu(ap) },
+            { text: '🌳 탄소 상쇄 구매', cb: () => this.openOffsetMenu(ap) },
+            { text: '📄 ESG 보고서 제출', cb: () => { 
+                this.flags.reported = true; 
+                this.log("✅ ESG 보고서를 제출했습니다. (규제 방어)");
+                this.updateDashboard();
+                this.phaseAction(ap - 1);
+            }},
+            { text: '🛡️ 보험 가입 (비용 5)', cb: () => {
+                if(this.money >= 5) {
+                    this.money -= 5;
+                    this.flags.insurance = true;
+                    this.log("🛡️ 재난 보험에 가입했습니다.");
+                    this.updateDashboard();
+                    this.phaseAction(ap - 1);
+                } else this.log("❌ 자금이 부족합니다.");
+            }},
+            { text: '⏩ 턴 종료', cb: () => this.phaseSettlement() }
+        ]);
     }
 
-    clearButtons() {
-        const group = document.getElementById('choice-btns');
-        if(group) group.remove();
+    // 액션: 자산 구매
+    buyAsset(assetId) {
+        const data = ASSETS[assetId];
+        if (this.money >= data.cost) {
+            this.money -= data.cost;
+            // 자산 추가 (고유 ID 생성)
+            this.assets.push({ ...data, id: Date.now(), level: 0 });
+            this.log(`🎉 [${data.name}] 인수 완료!`);
+            this.updateDashboard();
+            this.phaseAction(1); // 구매 후 액션 1회 남음
+        } else {
+            this.log("❌ 자금이 부족하여 인수 포기.");
+            this.phaseAction(2);
+        }
     }
 
-    showRollButton() {
-        this.rollBtn.style.display = 'inline-block';
-    }
-
-    buyProperty(tile) {
-        this.player.money -= tile.cost;
-        this.player.assets.push(tile.id);
-        this.player.carbon += tile.carbon;
-
-        this.log(`🎉 [${tile.name}] 매입 완료!`);
-        document.getElementById(`tile-${tile.id}`).style.border = "3px solid #f1c40f"; // 소유 표시
-        
-        this.updateUI();
-        this.clearButtons();
-        this.showRollButton();
-    }
-
-    passProperty(tile) {
-        this.log(`💨 [${tile.name}] 매입을 포기했습니다.`);
-        this.clearButtons();
-        this.showRollButton();
-    }
-
-    passStartLine() {
-        const tax = this.player.carbon > 0 ? this.player.carbon * GAME_CONFIG.TAX_RATE : 0;
-        const finalSalary = GAME_CONFIG.SALARY - tax;
-        this.player.money += finalSalary;
-        this.log(`🔄 월급 +${GAME_CONFIG.SALARY} / 세금 -${tax}`);
-        
-        // 파산 체크
-        if (this.player.money < 0) {
-            alert("💸 파산했습니다! 탄소세를 감당하지 못했습니다.");
-            location.reload();
+    // 액션: 기술 메뉴
+    openTechMenu(ap) {
+        if (this.assets.length === 0) {
+            this.log("⚠️ 보유 자산이 없어 업그레이드할 수 없습니다.");
+            this.phaseAction(ap);
+            return;
         }
         
-        this.updateUI();
-        this.checkWin();
+        const opts = this.assets.map(asset => ({
+            text: `${asset.name} 개량`,
+            cb: () => this.showUpgradeOptions(asset, ap)
+        }));
+        opts.push({ text: '취소', cb: () => this.phaseAction(ap) });
+        this.showModal("기술 투자 대상 선택", "어떤 사업장을 개선합니까?", opts);
     }
 
-    // 총 자산 계산
-    calculateTotalAsset() {
-        let assetValue = 0;
-        this.player.assets.forEach(id => {
-            const tile = MAP_DATA.find(t => t.id === id);
-            if(tile) assetValue += tile.cost; // 매입가를 자산 가치로 인정
+    showUpgradeOptions(asset, ap) {
+        const opts = TECH_UPGRADES.map(tech => ({
+            text: `${tech.name} (비용 ${tech.cost}) : ${tech.desc}`,
+            cb: () => {
+                if(this.money >= tech.cost) {
+                    this.money -= tech.cost;
+                    this.applyUpgrade(asset, tech);
+                    this.phaseAction(ap - 1);
+                } else this.log("❌ 자금이 부족합니다.");
+            }
+        }));
+        this.showModal(`${asset.name} 업그레이드`, "기술을 선택하세요", opts);
+    }
+
+    applyUpgrade(asset, tech) {
+        // 단순화된 로직: 효과 파싱
+        if(tech.id === 'eff') { asset.exp -= 1; asset.emit -= 1; }
+        if(tech.id === 'scale') { asset.rev += 3; asset.emit += 2; }
+        if(tech.id === 'green') { asset.emit -= 3; }
+        
+        // Min check
+        asset.exp = Math.max(1, asset.exp);
+        asset.emit = Math.max(0, asset.emit);
+        
+        this.log(`🛠️ ${asset.name}에 [${tech.name}] 적용 완료!`);
+        this.updateDashboard();
+    }
+
+    // 액션: 상쇄 메뉴
+    openOffsetMenu(ap) {
+        const opts = OFFSETS.map(off => ({
+            text: `${off.name} (비용 ${off.cost}) : ${off.desc}`,
+            cb: () => {
+                if(this.money >= off.cost) {
+                    this.money -= off.cost;
+                    // 상쇄 로직: 확률 체크
+                    if (Math.random() > off.risk) {
+                        this.carbonScore -= off.reduce;
+                        if(off.rep) this.reputation += off.rep;
+                        this.log(`🌳 ${off.name} 구매 성공! 탄소 -${off.reduce}`);
+                    } else {
+                        this.log(`⚠️ ${off.name} 구매했으나 품질 이슈로 무효화되었습니다!`);
+                        this.reputation -= 1;
+                    }
+                    this.updateDashboard();
+                    this.phaseAction(ap - 1);
+                } else this.log("❌ 자금이 부족합니다.");
+            }
+        }));
+        opts.push({ text: '취소', cb: () => this.phaseAction(ap) });
+        this.showModal("탄소 상쇄 크레딧 구매", "리스크를 고려해 선택하세요", opts);
+    }
+
+    // 이벤트: 감사(Audit)
+    triggerAudit() {
+        this.log("👮 규제 당국의 불시 감사가 들이닥쳤습니다!");
+        if (this.flags.reported) {
+            this.log("✅ 사전 보고를 완료하여 무사히 통과했습니다. (평판 +1)");
+            this.reputation += 1;
+        } else {
+            this.log("🚨 보고서 미제출 적발! 과태료 5억 부과.");
+            this.money -= 5;
+            this.reputation -= 1;
+        }
+        this.updateDashboard();
+        this.phaseAction(2);
+    }
+
+    // 이벤트: 랜덤
+    triggerRandomEvent() {
+        const evts = [
+            { msg: "🔥 공장 화재 발생!", act: () => { 
+                if(this.flags.insurance) this.log("🛡️ 보험으로 피해를 막았습니다.");
+                else { this.money -= 5; this.log("💸 복구 비용 5억 지출."); }
+            }},
+            { msg: "🌊 홍수 피해!", act: () => { 
+                // 자산 중 하나 탄소배출 일시 증가
+                if(this.assets.length > 0) {
+                    this.assets[0].emit += 2;
+                    this.log(`🌊 침수로 인해 ${this.assets[0].name} 효율 저하.`);
+                }
+            }},
+            { msg: "💰 친환경 보조금 당첨!", act: () => { this.money += 8; this.log("💵 보조금 8억 수령!"); } }
+        ];
+        const e = evts[Math.floor(Math.random() * evts.length)];
+        this.log(`❗ 이벤트: ${e.msg}`);
+        e.act();
+        this.updateDashboard();
+        this.phaseAction(2);
+    }
+
+    // --- 5. Phase 4: 정산 (Settlement) ---
+    phaseSettlement() {
+        this.log("==== 💰 분기 결산 ====");
+        
+        // 1. 사업 수익/비용
+        let totalRev = 0;
+        let totalExp = 0;
+        let totalEmit = 0;
+        
+        this.assets.forEach(a => {
+            totalRev += a.rev;
+            totalExp += a.exp;
+            totalEmit += a.emit;
         });
-        return this.player.money + assetValue;
-    }
 
-    checkWin() {
-        const total = this.calculateTotalAsset();
-        if (total >= this.GOAL_ASSET) {
-            alert(`🏆 축하합니다! 총 자산 ${total.toLocaleString()}k 달성!\n진정한 넷제로 타이쿤이 되셨습니다.`);
-            this.log("🏆 게임 승리!");
-        }
-    }
+        const opProfit = totalRev - totalExp;
+        this.money += opProfit;
+        this.carbonScore += totalEmit; // 누적 탄소
 
-    updateUI() {
-        if(document.getElementById('money')) {
-            document.getElementById('money').innerText = `${this.player.money.toLocaleString()}k`;
-        }
+        this.log(`📈 영업이익: +${opProfit}억 (매출 ${totalRev} - 비용 ${totalExp})`);
         
-        const carbonEl = document.getElementById('carbon');
-        if(carbonEl) {
-            carbonEl.innerText = `${this.player.carbon} t`;
-            carbonEl.style.color = this.player.carbon < 0 ? '#2980b9' : '#c0392b';
-        }
+        // 2. 탄소세 계산
+        // 탄소점수는 이번 턴 배출량만큼 오르고, 세금 낸 후 일부 초기화되거나 누적됨.
+        // 여기선 '이번 턴 발생분'에 대해 세금을 매기고, 탄소점수는 '누적 배출량'으로 관리한다고 가정.
+        // 하지만 게임적 허용으로 carbonScore를 '세금 부과 대상'으로 보고 세금 내면 0으로 리셋하는게 캐주얼함.
+        
+        let tax = Math.max(0, this.carbonScore * this.carbonTaxRate);
+        this.money -= tax;
+        this.log(`📉 탄소세 납부: -${tax}억 (배출 ${this.carbonScore} * 세율 ${this.carbonTaxRate})`);
+        
+        // 리셋 및 변동
+        this.carbonScore = 0; // 세금 냈으니 이번 분기 배출 리셋
+        this.flags.reported = false; // 보고 초기화
+        this.flags.insurance = false; // 보험 만료
+        this.carbonTaxRate += 0.2; // 세율 증가 (정책 강화)
 
-        // 총 자산 업데이트
-        const totalEl = document.getElementById('total-asset');
-        if(totalEl) {
-            const total = this.calculateTotalAsset();
-            totalEl.innerText = `${total.toLocaleString()}k`;
-            // 목표 달성률에 따라 색상 변경 (시각적 피드백)
-            totalEl.style.color = total >= this.GOAL_ASSET ? '#f1c40f' : '#333';
+        // 3. 턴 종료 체크
+        if (this.turn >= CONFIG.MAX_TURN) {
+            this.endGame();
+        } else {
+            this.turn++;
+            this.updateDashboard();
+            this.ui.rollBtn.disabled = false;
+            this.log(`📅 ${this.turn}분기가 시작되었습니다.`);
         }
+    }
+
+    endGame() {
+        // 최종 점수 계산
+        let assetVal = this.assets.reduce((acc, cur) => acc + cur.cost, 0);
+        let finalScore = this.money + assetVal + (this.reputation * 5);
+        
+        let grade = 'C';
+        if (finalScore >= 300) grade = 'S (그린 유니콘)';
+        else if (finalScore >= 200) grade = 'A (ESG 우수)';
+        else if (finalScore >= 100) grade = 'B (평범)';
+        else grade = 'D (파산 위기)';
+
+        alert(`🏁 게임 종료!\n\n등급: ${grade}\n최종 점수: ${finalScore}\n(현금 ${this.money} + 자산 ${assetVal} + 평판보너스)`);
+        location.reload();
+    }
+
+    // --- UI Helpers ---
+    updateDashboard() {
+        document.getElementById('d-money').innerText = Math.floor(this.money);
+        document.getElementById('d-carbon').innerText = this.carbonScore;
+        document.getElementById('d-rep').innerText = this.reputation;
+        document.getElementById('d-rate').innerText = `x${this.carbonTaxRate.toFixed(1)}`;
+        document.getElementById('turn-display').innerText = this.turn;
+        
+        const flagRep = document.getElementById('flag-report');
+        flagRep.className = this.flags.reported ? 'badge active' : 'badge';
+        flagRep.innerText = this.flags.reported ? '📄 보고완료' : '📄 미보고';
+
+        const flagIns = document.getElementById('flag-insurance');
+        flagIns.className = this.flags.insurance ? 'badge active' : 'badge';
+        flagIns.innerText = this.flags.insurance ? '🛡️ 보험가입' : '🛡️ 미가입';
+
+        // 자산 리스트
+        const ul = document.getElementById('asset-ul');
+        ul.innerHTML = '';
+        this.assets.forEach(a => {
+            const li = document.createElement('li');
+            li.className = 'asset-item';
+            li.innerHTML = `<span>${a.name}</span><span>Rev ${a.rev}/Emit ${a.emit}</span>`;
+            ul.appendChild(li);
+        });
     }
 
     log(msg) {
-        const p = document.createElement('p');
+        const p = document.createElement('div');
         p.innerText = msg;
-        if(this.logEl) this.logEl.prepend(p);
+        p.style.marginBottom = "4px";
+        this.ui.log.prepend(p);
+    }
+
+    showModal(title, desc, options) {
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-desc').innerText = desc;
+        this.ui.modalOpts.innerHTML = '';
+        
+        options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-opt';
+            btn.innerHTML = opt.text.replace(/\n/g, '<br>');
+            btn.onclick = () => {
+                this.closeModal();
+                opt.cb();
+            };
+            this.ui.modalOpts.appendChild(btn);
+        });
+        
+        this.ui.modal.classList.remove('hidden');
+    }
+
+    closeModal() {
+        this.ui.modal.classList.add('hidden');
     }
 }
 
-new CarbonMarble();
+new Game();
