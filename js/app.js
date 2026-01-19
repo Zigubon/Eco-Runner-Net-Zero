@@ -5,9 +5,12 @@ class TycoonGame {
         this.week = 1;
         this.money = GAME_CONFIG.START_MONEY;
         this.rep = GAME_CONFIG.START_REP;
-        this.gridSize = 100; // 10x10 Grid
+        this.gridSize = 100; 
         this.mapData = Array(this.gridSize).fill(null);
         this.taxRate = GAME_CONFIG.TAX_RATE_BASE;
+
+        // 선택된 건물 (건설 모드)
+        this.selectedBuildingId = null;
 
         // UI 캐싱
         this.ui = {
@@ -20,10 +23,10 @@ class TycoonGame {
             week: document.getElementById('ui-week'),
             msg: document.getElementById('ui-message'),
             buildList: document.getElementById('building-list'),
-            reportBody: document.getElementById('report-details')
+            reportBody: document.getElementById('report-details'),
+            cancelBtn: document.getElementById('btn-cancel-select')
         };
         
-        this.selectedTileIndex = -1;
         this.init();
     }
 
@@ -31,21 +34,21 @@ class TycoonGame {
         this.generateMap();
         this.renderGrid();
         this.updateHUD();
+        // 초기화 시 성장 탭 렌더링
+        this.filterBuild('growth');
         this.bindEvents();
-        console.log("🏙️ ESG City V2 - 10x10 Map Initialized");
+        console.log("🏙️ ESG City V2.1 - Sidebar UI Mode");
     }
 
-    // 0. 맵 생성 (오염 유산 배치)
+    // 0. 맵 생성
     generateMap() {
-        // 중앙 시청 (44, 45, 54, 55 중 하나, 10x10이니까 45번 위치쯤)
         const centerIdx = 45;
         this.placeBuilding(centerIdx, 'town_hall');
 
-        // 오염 유산 랜덤 배치 (10개 정도)
         const legacyTypes = ['landfill', 'old_factory', 'flood_house'];
         for(let i=0; i<10; i++) {
             let rndIdx = Math.floor(Math.random() * this.gridSize);
-            if(!this.mapData[rndIdx]) { // 빈 땅이면
+            if(!this.mapData[rndIdx]) { 
                 let rndType = legacyTypes[Math.floor(Math.random() * legacyTypes.length)];
                 this.placeBuilding(rndIdx, rndType);
             }
@@ -62,91 +65,134 @@ class TycoonGame {
         this.mapData.forEach((building, idx) => {
             const tile = document.createElement('div');
             tile.className = building ? 'tile' : 'tile empty';
-            // 오염 유산 등 타입 데이터 속성 추가 (CSS 스타일링용)
             if(building) tile.setAttribute('data-type', building.type);
             
             tile.onclick = () => this.handleTileClick(idx);
             
             if (building) {
-                tile.innerHTML = `<span class="b-icon">${building.icon}</span>`;
+                tile.innerHTML = `<span>${building.icon}</span>`;
             }
             this.ui.grid.appendChild(tile);
         });
     }
 
+    // --- 핵심 로직 변경: 타일 클릭 ---
     handleTileClick(idx) {
-        if (this.mapData[idx]) {
-            const b = this.mapData[idx];
-            // 오염 유산이나 기존 건물도 덮어쓰기(재건축) 가능하게 UX 변경
-            // 단, 시청은 보호
-            if(b.id === 'town_hall') {
-                this.showMessage(`🏛️ 시청: 철거할 수 없습니다.`);
-            } else {
-                this.selectedTileIndex = idx;
-                // 기존 건물 정보 보여주면서 재건축 유도
-                if(b.type === 'legacy') this.showMessage(`⚠️ [${b.name}] 철거하고 새 건물을 지으세요!`);
-                else this.showMessage(`[${b.name}] 선택됨. (재건축 가능)`);
-                this.openBuildMenu();
+        const currentB = this.mapData[idx];
+
+        // 1. 건설 모드일 때 (건물을 선택한 상태)
+        if (this.selectedBuildingId) {
+            const template = BUILDINGS.find(b => b.id === this.selectedBuildingId);
+            
+            // 시청은 덮어쓰기 불가
+            if(currentB && currentB.id === 'town_hall') {
+                this.showMessage("❌ 시청은 철거할 수 없습니다.");
+                return;
             }
+
+            // 돈 확인
+            if(this.money < template.cost) {
+                this.showMessage("💸 자금이 부족합니다!");
+                return;
+            }
+
+            // 건설 실행
+            this.build(idx, template);
+            return;
+        }
+
+        // 2. 정보 보기 모드 (아무것도 선택 안 함)
+        if (currentB) {
+            if(currentB.type === 'legacy') this.showMessage(`⚠️ [${currentB.name}] 오염 유산입니다. 철거하세요!`);
+            else this.showMessage(`ℹ️ [${currentB.name}] 수익:${currentB.rev} 배출:${currentB.emit}`);
         } else {
-            this.selectedTileIndex = idx;
-            this.openBuildMenu();
+            this.showMessage("우측 메뉴에서 건물을 선택하고 클릭하세요.");
         }
     }
 
-    // 탭 필터링
+    // --- 우측 패널 로직 ---
+    
+    // 탭 필터링 및 리스트 렌더링
     filterBuild(type) {
-        const items = document.querySelectorAll('.build-item');
-        items.forEach(item => {
-            if(type === 'all' || item.dataset.type === type) item.style.display = 'flex';
-            else item.style.display = 'none';
-        });
-    }
+        // 탭 활성화 스타일
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
 
-    openBuildMenu() {
         this.ui.buildList.innerHTML = '';
-        // 건설 가능한 목록 (유산/기본건물 제외)
         const buildable = BUILDINGS.filter(b => b.type !== 'legacy' && b.id !== 'town_hall');
 
         buildable.forEach(b => {
+            // 타입 필터
+            if(type !== 'all' && b.type !== type) return;
+
             const item = document.createElement('div');
             item.className = 'build-item';
-            item.dataset.type = b.type; // 필터용
+            // 이미 선택된 건물이면 스타일 적용
+            if(this.selectedBuildingId === b.id) item.classList.add('selected');
             
             const canAfford = this.money >= b.cost;
-            item.style.opacity = canAfford ? '1' : '0.5';
-            
-            let statHtml = `💰${b.cost} | 수익 ${b.rev}`;
-            if(b.emit > 0) statHtml += ` | <span style="color:red">배출 ${b.emit}</span>`;
-            if(b.emit < 0) statHtml += ` | <span style="color:green">감축 ${Math.abs(b.emit)}</span>`;
-            if(b.power < 0) statHtml += ` | ⚡${b.power}`;
+            if(!canAfford) item.classList.add('disabled');
 
             item.innerHTML = `
-                <div class="bi-head">${b.icon} ${b.name}</div>
-                <div class="bi-stat">${statHtml}</div>
-                <div class="bi-stat">${b.desc}</div>
+                <div class="bi-icon">${b.icon}</div>
+                <div class="bi-info">
+                    <div class="bi-name">${b.name}</div>
+                    <div class="bi-cost">💰 ${b.cost}</div>
+                    <div class="bi-desc">수익${b.rev} / 탄소${b.emit}</div>
+                </div>
             `;
+            
             item.onclick = () => {
-                if (canAfford) this.build(b);
-                else alert("자금이 부족합니다!");
+                if(!canAfford) { this.showMessage("자금이 부족합니다."); return; }
+                this.selectBuilding(b.id);
             };
+
             this.ui.buildList.appendChild(item);
         });
-        document.getElementById('build-modal').classList.remove('hidden');
-        // 기본적으로 첫 탭 활성화 (Growth)
-        this.filterBuild('growth'); 
     }
 
-    build(template) {
-        // 기존 건물이 있다면(오염 유산 등) 철거비용? 일단 무료 철거로 처리
+    selectBuilding(id) {
+        this.selectedBuildingId = id;
+        this.showMessage(`🔨 건설 모드: 맵을 클릭해 건설하세요.`);
+        
+        // UI 갱신 (선택 표시)
+        const items = document.querySelectorAll('.build-item');
+        items.forEach(el => el.classList.remove('selected'));
+        // 다시 렌더링하긴 비효율적이니, 간단히 처리하거나 탭 갱신
+        // 여기선 간단히 탭을 리프레시 하지 않고 스타일만 찾아서 넣을 수도 있으나,
+        // 코드를 단순하게 유지하기 위해 현재 탭 재렌더링은 생략하고 클래스만 토글한다고 가정
+        // 하지만 위 filterBuild 함수가 호출될 때마다 초기화되므로, 
+        // 그냥 시각적 피드백을 위해 취소 버튼을 활성화함.
+        
+        this.ui.cancelBtn.classList.remove('hidden');
+        
+        // 리스트 아이템 스타일 갱신 (간단버전)
+        this.filterBuild(BUILDINGS.find(b=>b.id===id).type); 
+    }
+
+    cancelSelection() {
+        this.selectedBuildingId = null;
+        this.showMessage("선택 취소됨.");
+        this.ui.cancelBtn.classList.add('hidden');
+        
+        // 리스트 스타일 초기화
+        const items = document.querySelectorAll('.build-item');
+        items.forEach(el => el.classList.remove('selected'));
+    }
+
+    build(idx, template) {
         this.money -= template.cost;
-        this.mapData[this.selectedTileIndex] = { ...template };
+        this.mapData[idx] = { ...template };
+        
         this.renderGrid();
         this.updateHUD();
         this.showMessage(`🏗️ ${template.name} 건설 완료!`);
-        document.getElementById('build-modal').classList.add('hidden');
+        
+        // 연속 건설을 위해 선택 상태 유지 (원하면 여기서 null로 초기화 가능)
+        // this.cancelSelection(); 
     }
 
+    // --- 주간 정산 (기존 로직 유지) ---
     nextWeek() {
         if (this.week > GAME_CONFIG.MAX_WEEKS) {
             alert(`게임 종료! 최종 자산: ${this.money}`);
@@ -168,42 +214,37 @@ class TycoonGame {
             }
         });
 
-        // 1. 전력망 패널티 (데이터센터 등 전력 먹는 하마가 있는데 전력이 부족하면?)
-        // 그리드 업그레이드(스마트그리드)가 있으면 페널티 완화 가능하지만, 여기선 단순 계산
         if(totalPower < 0) {
-            // 부족분 1당 유지비 5 증가 (비상 발전)
             const penalty = Math.abs(totalPower) * 5;
             totalExp += penalty;
-            this.showMessage(`⚡ 전력 부족! (${totalPower}) 비용 -${penalty}`);
+            this.showMessage(`⚡ 전력 부족! 비용 -${penalty}`);
         }
 
-        // 2. 탄소세
         const netEmit = Math.max(0, totalEmit); 
         const tax = netEmit * this.taxRate;
 
-        // 3. 이벤트
-        // 이벤트 계산을 위한 임시 상태
         let tempState = { money: this.money, rep: this.rep + totalRep, res: totalRes, weekEmit: netEmit, weekPower: totalPower };
         
         const evt = EVENTS[Math.floor(Math.random() * EVENTS.length)];
         const evtResult = evt.effect(tempState);
 
-        // 이벤트 결과 반영
         this.money = tempState.money;
-        
-        // 4. 최종 정산
         const netProfit = totalRev - totalExp - tax;
         this.money += netProfit;
 
         this.showReport(totalRev, totalExp, tax, netEmit, evt, evtResult, netProfit);
 
         this.week++;
-        // 4주마다 탄소세 인상
         if(this.week % 4 === 1 && this.week > 1) {
             this.taxRate += 1;
         }
         
         this.updateHUD();
+        // UI 리프레시 (건설 가능 여부 갱신 등)
+        if(this.selectedBuildingId) {
+             const bType = BUILDINGS.find(b=>b.id===this.selectedBuildingId).type;
+             this.filterBuild(bType);
+        }
     }
 
     showReport(rev, exp, tax, emit, evt, evtResult, netProfit) {
@@ -230,7 +271,6 @@ class TycoonGame {
         this.ui.money.innerText = this.money;
         this.ui.week.innerText = this.week <= GAME_CONFIG.MAX_WEEKS ? this.week : "END";
         
-        // 전체 스탯 다시 계산
         let currentEmit = 0, currentPower = 0, currentRep = GAME_CONFIG.START_REP, currentRes = 0;
         this.mapData.forEach(b => {
             if(b) {
@@ -256,8 +296,12 @@ class TycoonGame {
 
     bindEvents() {
         document.getElementById('btn-next-week').onclick = () => this.nextWeek();
-        // 전역 함수 연결 (HTML에서 호출)
         window.game = this; 
+        
+        // 키보드 ESC 취소
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'Escape') this.cancelSelection();
+        });
     }
 }
 
