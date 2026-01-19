@@ -3,70 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESG Tycoon: 12분기 생존기</title>
+    <title>ESG City Tycoon</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-wrapper">
-        <div class="board-container">
-            <div class="board" id="board">
-                <div class="center-area">
-                    <div class="logo">🏭 ESG Tycoon</div>
-                    <div class="turn-indicator">분기: <span id="turn-display">1</span> / 12</div>
-                    <div class="dice-box">
-                        <span id="dice-val">🎲 ?</span>
-                        <button id="roll-btn" class="btn-main">주사위 굴리기</button>
+    <div class="game-container">
+        <header class="hud">
+            <div class="hud-top">
+                <span class="logo">🌲 ESG City</span>
+                <span class="week-badge">Week <span id="ui-week">1</span></span>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span class="icon">💰</span>
+                    <div class="stat-info">
+                        <span class="label">예산</span>
+                        <span class="value" id="ui-money">0</span>
                     </div>
-                    <div class="log-box" id="game-log"></div>
+                </div>
+                <div class="stat-box">
+                    <span class="icon">🏭</span>
+                    <div class="stat-info">
+                        <span class="label">주간 배출</span>
+                        <span class="value danger" id="ui-emit">0t</span>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <span class="icon">⭐</span>
+                    <div class="stat-info">
+                        <span class="label">평판</span>
+                        <span class="value" id="ui-rep">0</span>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <span class="icon">⚡</span>
+                    <div class="stat-info">
+                        <span class="label">전력/인프라</span>
+                        <span class="value" id="ui-infra">0</span>
+                    </div>
                 </div>
             </div>
-        </div>
+        </header>
 
-        <div class="dashboard">
-            <h3>📊 CFO Dashboard</h3>
-            
-            <div class="stat-group">
-                <div class="stat-item">
-                    <span class="label">💵 현금</span>
-                    <span class="value" id="d-money">0</span>
+        <main class="city-viewport">
+            <div class="city-grid" id="city-grid">
                 </div>
-                <div class="stat-item">
-                    <span class="label">🏭 탄소점수</span>
-                    <span class="value danger" id="d-carbon">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="label">⭐ 평판</span>
-                    <span class="value" id="d-rep">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="label">📉 탄소세율</span>
-                    <span class="value" id="d-rate">x1</span>
-                </div>
-            </div>
+        </main>
 
-            <div class="asset-list">
-                <h4>보유 자산 (Assets)</h4>
-                <ul id="asset-ul">
-                    </ul>
-            </div>
-            
-            <div class="status-flags">
-                <span id="flag-report" class="badge">📄 미보고</span>
-                <span id="flag-insurance" class="badge">🛡️ 미가입</span>
-            </div>
+        <footer class="controls">
+            <div class="info-text" id="ui-message">빈 땅을 클릭해 건물을 지으세요!</div>
+            <button id="btn-next-week" class="btn-main">📅 주간 정산 (Next Week)</button>
+        </footer>
+    </div>
+
+    <div id="build-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>건설 메뉴</h3>
+            <div class="building-list" id="building-list">
+                </div>
+            <button class="btn-close" onclick="closeModal()">닫기</button>
         </div>
     </div>
 
-    <div id="action-modal" class="modal hidden">
-        <div class="modal-content">
-            <h3 id="modal-title">경영 액션 선택</h3>
-            <p id="modal-desc" class="modal-desc">이번 분기 남은 액션: 2회</p>
-            <div id="modal-options" class="options-grid">
-                </div>
-            <button id="modal-close" class="btn-close hidden">닫기</button>
+    <div id="report-modal" class="modal hidden">
+        <div class="modal-content report-content">
+            <h3>📅 주간 리포트</h3>
+            <div id="report-details" class="report-body"></div>
+            <button class="btn-main" onclick="closeReport()">다음 주 시작</button>
         </div>
     </div>
 
     <script type="module" src="js/app.js"></script>
+    <script>
+        // 전역 함수로 모달 닫기 연결
+        function closeModal() { document.getElementById('build-modal').classList.add('hidden'); }
+        function closeReport() { document.getElementById('report-modal').classList.add('hidden'); }
+    </script>
 </body>
 </html>
