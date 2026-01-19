@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESG City Tycoon</title>
+    <title>ESG City Tycoon V2</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
         <header class="hud">
             <div class="hud-top">
-                <span class="logo">🌲 ESG City</span>
+                <span class="logo">🏙️ ESG City V2</span>
                 <span class="week-badge">Week <span id="ui-week">1</span></span>
             </div>
             <div class="stats-grid">
@@ -31,14 +31,21 @@
                 <div class="stat-box">
                     <span class="icon">⭐</span>
                     <div class="stat-info">
-                        <span class="label">평판</span>
+                        <span class="label">만족도/평판</span>
                         <span class="value" id="ui-rep">0</span>
                     </div>
                 </div>
                 <div class="stat-box">
-                    <span class="icon">⚡</span>
+                    <span class="icon">🛡️</span>
                     <div class="stat-info">
-                        <span class="label">전력/인프라</span>
+                        <span class="label">회복력</span>
+                        <span class="value" id="ui-res">0</span>
+                    </div>
+                </div>
+                <div class="stat-box full-width">
+                    <span class="icon">⚡</span>
+                    <div class="stat-info row">
+                        <span class="label">전력망</span>
                         <span class="value" id="ui-infra">0</span>
                     </div>
                 </div>
@@ -51,7 +58,7 @@
         </main>
 
         <footer class="controls">
-            <div class="info-text" id="ui-message">빈 땅을 클릭해 건물을 지으세요!</div>
+            <div class="info-text" id="ui-message">오염 유산을 정리하고 도시를 재건하세요!</div>
             <button id="btn-next-week" class="btn-main">📅 주간 정산 (Next Week)</button>
         </footer>
     </div>
@@ -59,6 +66,12 @@
     <div id="build-modal" class="modal hidden">
         <div class="modal-content">
             <h3>건설 메뉴</h3>
+            <div class="filter-tabs">
+                <button onclick="window.game.filterBuild('growth')">성장</button>
+                <button onclick="window.game.filterBuild('energy')">에너지</button>
+                <button onclick="window.game.filterBuild('circular')">순환</button>
+                <button onclick="window.game.filterBuild('infra')">인프라</button>
+            </div>
             <div class="building-list" id="building-list">
                 </div>
             <button class="btn-close" onclick="closeModal()">닫기</button>
@@ -75,7 +88,6 @@
 
     <script type="module" src="js/app.js"></script>
     <script>
-        // 전역 함수로 모달 닫기 연결
         function closeModal() { document.getElementById('build-modal').classList.add('hidden'); }
         function closeReport() { document.getElementById('report-modal').classList.add('hidden'); }
     </script>
