@@ -5,20 +5,18 @@ class TycoonGame {
         this.year = 1;
         this.money = GAME_CONFIG.START_MONEY;
         this.rep = GAME_CONFIG.START_REP;
-        this.gridSize = 100; // 10x10 Grid
-        this.mapData = Array(this.gridSize).fill(null);
+        this.gridSize = 100; // 10x10
+        this.mapData = Array(this.gridSize).fill(null); // 건물 데이터
         this.taxRate = GAME_CONFIG.TAX_RATE_BASE;
-        
+        this.leader = null;
         this.selectedBuildingId = null;
         this.researched = [];
-        this.leader = null; // 선택된 리더
 
         this.ui = {
             grid: document.getElementById('city-grid'),
             money: document.getElementById('ui-money'),
             emit: document.getElementById('ui-emit'),
             rep: document.getElementById('ui-rep'),
-            res: document.getElementById('ui-res'),
             infra: document.getElementById('ui-infra'),
             year: document.getElementById('ui-year'),
             msg: document.getElementById('ui-message'),
@@ -28,25 +26,23 @@ class TycoonGame {
             reportBody: document.getElementById('report-details'),
             cancelBtn: document.getElementById('btn-cancel-select'),
             tooltip: document.getElementById('tooltip'),
-            leaderModal: document.getElementById('leader-modal'),
-            leaderList: document.getElementById('leader-list')
+            leaderModal: document.getElementById('intro-screen'),
+            leaderList: document.getElementById('intro-leader-list'),
+            startBtn: document.getElementById('btn-start-game'),
+            rouletteModal: document.getElementById('roulette-modal'),
+            rouletteText: document.getElementById('roulette-display'),
+            rouletteRes: document.getElementById('roulette-result'),
+            rouletteDesc: document.getElementById('roulette-desc')
         };
         
         this.init();
     }
 
     init() {
-        // 리더 선택 모달 띄우기
         this.renderLeaderSelection();
-        this.generateMap();
-        this.renderGrid();
-        this.updateHUD();
-        this.filterBuild('growth');
-        this.renderResearch();
-        this.bindEvents();
+        this.ui.startBtn.onclick = () => this.startGame();
     }
 
-    // --- 리더 선택 ---
     renderLeaderSelection() {
         this.ui.leaderList.innerHTML = '';
         LEADERS.forEach(leader => {
@@ -58,189 +54,293 @@ class TycoonGame {
                 <div class="l-desc">${leader.desc}</div>
                 <div class="l-buff">${leader.buff}</div>
             `;
-            card.onclick = () => this.selectLeader(leader);
+            card.onclick = () => {
+                document.querySelectorAll('.leader-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                this.leader = leader;
+                this.ui.startBtn.disabled = false;
+                this.ui.startBtn.innerText = `${leader.name}로 시작하기`;
+            };
             this.ui.leaderList.appendChild(card);
         });
-        this.ui.leaderModal.classList.remove('hidden');
     }
 
-    selectLeader(leader) {
-        this.leader = leader;
-        this.ui.leaderModal.classList.add('hidden');
-        this.addLog(`⭐ [${leader.name}] 취임! (${leader.buff})`);
-        this.showMessage(`환영합니다, 시장님! ${leader.name} 특성이 적용됩니다.`);
-        this.filterBuild('growth'); // 리더 특성(가격) 반영을 위해 갱신
+    startGame() {
+        document.getElementById('intro-screen').style.display = 'none';
+        this.generateMap();
+        this.renderGrid();
+        this.updateHUD();
+        this.filterBuild('growth');
+        this.renderResearch();
+        this.bindEvents();
+        this.addLog(`게임 시작! ${this.leader.name} 취임.`);
     }
 
     // --- 맵 생성 ---
     generateMap() {
+        // 중앙 시청
         this.placeBuilding(45, 'town_hall');
+
+        // 오염 유산 6개
         const legacyTypes = ['landfill', 'old_factory', 'flood_house'];
         let placed = 0;
         while(placed < 6) {
             let rndIdx = Math.floor(Math.random() * this.gridSize);
-            if(!this.mapData[rndIdx]) { 
+            if(this.checkSpace(rndIdx, 1, 1)) {
                 let rndType = legacyTypes[Math.floor(Math.random() * legacyTypes.length)];
                 this.placeBuilding(rndIdx, rndType);
                 placed++;
+            }
+        }
+
+        // 숲 3개 (밸런스)
+        let forests = 0;
+        while(forests < 3) {
+            let rndIdx = Math.floor(Math.random() * this.gridSize);
+            if(this.checkSpace(rndIdx, 1, 1)) {
+                this.placeBuilding(rndIdx, 'forest');
+                forests++;
             }
         }
     }
 
     placeBuilding(idx, id) {
         const b = BUILDINGS.find(x => x.id === id);
-        if(b) this.mapData[idx] = { ...b };
+        if(b) {
+            // 멀티 타일 점유 처리
+            this.setOccupied(idx, b.w, b.h, { ...b, rootIdx: idx });
+        }
     }
 
+    // 공간 확인 (Multi-tile)
+    checkSpace(idx, w, h) {
+        const row = Math.floor(idx / 10);
+        const col = idx % 10;
+        
+        // 맵 밖으로 나가는지 체크
+        if (col + w > 10 || row + h > 10) return false;
+
+        for(let r=0; r<h; r++) {
+            for(let c=0; c<w; c++) {
+                let targetIdx = idx + (r * 10) + c;
+                if(this.mapData[targetIdx] !== null) return false;
+            }
+        }
+        return true;
+    }
+
+    // 점유 설정
+    setOccupied(idx, w, h, data) {
+        for(let r=0; r<h; r++) {
+            for(let c=0; c<w; c++) {
+                let targetIdx = idx + (r * 10) + c;
+                this.mapData[targetIdx] = data; // 모든 칸에 데이터 참조 저장 (단순화)
+            }
+        }
+    }
+
+    // 철거 (공간 비우기)
+    clearSpace(idx) {
+        const b = this.mapData[idx];
+        if(!b) return;
+        
+        // 건물의 시작점(root)을 찾거나, 저장된 rootIdx 사용
+        const root = b.rootIdx !== undefined ? b.rootIdx : idx; 
+        
+        for(let r=0; r<b.h; r++) {
+            for(let c=0; c<b.w; c++) {
+                let targetIdx = root + (r * 10) + c;
+                this.mapData[targetIdx] = null;
+            }
+        }
+    }
+
+    // --- 렌더링 ---
     renderGrid() {
         this.ui.grid.innerHTML = '';
-        this.mapData.forEach((building, idx) => {
+        
+        // 렌더링 중 중복 그리기 방지
+        const renderedIndices = new Set();
+
+        for(let i=0; i<this.gridSize; i++) {
+            if(renderedIndices.has(i)) continue;
+
+            const b = this.mapData[i];
             const tile = document.createElement('div');
-            tile.className = building ? 'tile' : 'tile empty';
-            if(building) tile.setAttribute('data-type', building.type);
+            tile.className = 'tile';
             
-            tile.onmouseenter = (e) => this.showTooltip(e, building);
-            tile.onmousemove = (e) => this.moveTooltip(e);
-            tile.onmouseleave = () => this.hideTooltip();
-            tile.onclick = () => this.handleTileClick(idx);
-            
-            if (building) tile.innerHTML = `<span>${building.icon}</span>`;
-            this.ui.grid.appendChild(tile);
-        });
-    }
+            if(b) {
+                // 루트인 경우에만 렌더링하고 나머지는 건너뜀
+                if(b.rootIdx === i) {
+                    tile.innerHTML = `<span>${b.icon}</span>`;
+                    tile.setAttribute('data-type', b.type);
+                    
+                    // CSS Grid Span 적용
+                    if(b.w > 1) tile.classList.add('w2');
+                    if(b.h > 1) tile.classList.add('h2');
+                    
+                    // 스타일 직접 지정 (grid-column/row)
+                    tile.style.gridColumnStart = (i % 10) + 1;
+                    tile.style.gridColumnEnd = `span ${b.w}`;
+                    tile.style.gridRowStart = Math.floor(i / 10) + 1;
+                    tile.style.gridRowEnd = `span ${b.h}`;
 
-    // --- 툴팁 ---
-    showTooltip(e, building) {
-        if(!building) return;
-        let html = `<h4>${building.icon} ${building.name}</h4>`;
-        
-        if(building.type === 'legacy') {
-             html += `<div style="color:#ff7675">⚠️ 오염 유산</div>`;
-             html += `<div>철거비용: 💰${building.demolishCost}</div>`;
-        } else {
-             // 리더 버프 적용된 수익 표시? (여기선 기본값만 표시하거나 계산해서 표시)
-             html += `<div>수익: +${building.rev} | 유지: -${building.exp}</div>`;
+                    // 마우스 이벤트
+                    tile.onmouseenter = (e) => this.showTooltip(e, b);
+                    tile.onmousemove = (e) => this.moveTooltip(e);
+                    tile.onmouseleave = () => this.hideTooltip();
+                    tile.onclick = () => this.handleTileClick(i); // 클릭은 루트 인덱스로
+
+                    this.ui.grid.appendChild(tile);
+
+                    // 점유된 인덱스들 마킹
+                    for(let r=0; r<b.h; r++) {
+                        for(let c=0; c<b.w; c++) {
+                            renderedIndices.add(i + (r*10) + c);
+                        }
+                    }
+                }
+            } else {
+                // 빈 땅
+                tile.className = 'tile empty';
+                tile.onclick = () => this.handleTileClick(i);
+                this.ui.grid.appendChild(tile);
+            }
         }
-        
-        if(building.emit > 0) html += `<div>탄소: <span class="stat-neg">배출 ${building.emit}t</span></div>`;
-        if(building.emit < 0) html += `<div>탄소: <span class="stat-pos">감축 ${Math.abs(building.emit)}t</span></div>`;
-        
-        if(building.power > 0) html += `<div>전력: <span class="stat-pos">생산 +${building.power}</span></div>`;
-        if(building.power < 0) html += `<div>전력: <span class="stat-neg">소모 ${building.power}</span></div>`;
-
-        this.ui.tooltip.innerHTML = html;
-        this.ui.tooltip.classList.remove('hidden');
-        this.moveTooltip(e);
     }
-    
-    moveTooltip(e) {
-        this.ui.tooltip.style.left = (e.pageX + 15) + 'px';
-        this.ui.tooltip.style.top = (e.pageY + 15) + 'px';
-    }
-    hideTooltip() { this.ui.tooltip.classList.add('hidden'); }
 
     // --- 클릭 핸들러 ---
     handleTileClick(idx) {
         const currentB = this.mapData[idx];
 
+        // 1. 건설 모드
         if (this.selectedBuildingId) {
             if(currentB) {
-                if(currentB.id === 'town_hall') { alert("시청은 철거할 수 없습니다."); return; }
-                if(currentB.type === 'legacy') { alert("오염 유산은 먼저 철거해야 합니다."); return; }
+                if(currentB.id === 'town_hall') { alert("시청은 철거 불가!"); return; }
+                if(currentB.type === 'legacy') { alert("오염 유산은 철거 후 건설하세요."); return; }
+                if(currentB.id === 'forest') { /* 숲은 덮어쓰기 가능 */ }
+                else { alert("빈 땅이나 숲에만 건설 가능합니다. (기존 건물은 철거 필요)"); return; }
             }
             
-            // 건물 가격 계산 (리더 버프 적용)
             const template = BUILDINGS.find(b => b.id === this.selectedBuildingId);
-            const finalCost = this.getBuildingCost(template);
-
-            if(this.money < finalCost) { alert("자금이 부족합니다!"); return; }
             
-            this.build(idx, template, finalCost);
+            // 공간 체크
+            if(!this.checkSpace(idx, template.w, template.h)) {
+                this.showMessage("❌ 공간이 부족합니다! (건물이 겹치거나 맵 밖입니다)");
+                return;
+            }
+
+            // 비용 (리더 할인)
+            let cost = template.cost;
+            if(this.leader.id === 'energy_expert' && template.type === 'energy') cost = Math.floor(cost * 0.8);
+
+            if(this.money < cost) { this.showMessage("💸 자금 부족!"); return; }
+            
+            this.build(idx, template, cost);
             return;
         }
 
+        // 2. 일반 모드 (철거)
         if (currentB && currentB.id !== 'town_hall') {
             const cost = currentB.type === 'legacy' ? currentB.demolishCost : 10;
             if(confirm(`[${currentB.name}] 철거하시겠습니까? (비용: ${cost}억)`)) {
                 if(this.money >= cost) {
                     this.money -= cost;
-                    this.mapData[idx] = null;
+                    this.clearSpace(idx); // 멀티타일 철거
                     this.renderGrid();
                     this.updateHUD();
-                    this.addLog(`${currentB.name} 철거 (-${cost})`, 'bad');
-                    this.showMessage("철거 완료.");
+                    this.addLog(`${currentB.name} 철거 (-${cost})`);
                 } else {
-                    alert("철거 자금이 부족합니다.");
+                    alert("철거 자금 부족");
                 }
             }
-        } else if (!currentB) {
-            this.showMessage("우측 메뉴에서 건물을 선택하고 땅을 클릭하세요.");
         }
     }
 
-    // --- 비용 계산 함수 (리더 버프) ---
-    getBuildingCost(building) {
-        let cost = building.cost;
-        // 에너지 전문가: 에너지 건물 20% 할인
-        if(this.leader && this.leader.id === 'energy_expert' && building.type === 'energy') {
-            cost = Math.floor(cost * 0.8);
-        }
-        return cost;
+    build(idx, template, cost) {
+        this.money -= cost;
+        // 기존(숲 등) 제거 후 건설
+        this.clearSpace(idx);
+        this.setOccupied(idx, template.w, template.h, { ...template, rootIdx: idx });
+        
+        this.renderGrid();
+        this.updateHUD();
+        this.addLog(`${template.name} 건설 (-${cost})`);
+        
+        // 연속 건설을 위해 선택 유지하되 메시지 띄움
+        this.showMessage(`${template.name} 건설 완료!`);
     }
 
-    // --- 건설 패널 ---
+    // --- 툴팁 ---
+    showTooltip(e, b) {
+        let html = `<h4>${b.icon} ${b.name}</h4>`;
+        if(b.type === 'legacy') html += `<div style="color:#ff7675">⚠️ 철거비용: ${b.demolishCost}</div>`;
+        else if(b.id !== 'forest') html += `<div>수익 ${b.rev} | 유지 ${b.exp}</div>`;
+        
+        if(b.emit !== 0) html += `<div>탄소: ${b.emit > 0 ? '-' : '+'}${Math.abs(b.emit)}</div>`;
+        if(b.power !== 0) html += `<div>전력: ${b.power > 0 ? '+' : ''}${b.power}</div>`;
+        
+        this.ui.tooltip.innerHTML = html;
+        this.ui.tooltip.classList.remove('hidden');
+        this.moveTooltip(e);
+    }
+    moveTooltip(e) { this.ui.tooltip.style.left = (e.pageX+15)+'px'; this.ui.tooltip.style.top = (e.pageY+15)+'px'; }
+    hideTooltip() { this.ui.tooltip.classList.add('hidden'); }
+
+    // --- 패널 ---
     filterBuild(type) {
-        document.querySelectorAll('.sub-tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.type === type);
-        });
-
+        document.querySelectorAll('.sub-tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
         this.ui.buildList.innerHTML = '';
-        const buildable = BUILDINGS.filter(b => b.type !== 'legacy' && b.id !== 'town_hall');
-
+        
+        const buildable = BUILDINGS.filter(b => b.type !== 'legacy' && b.id !== 'town_hall' && b.id !== 'forest');
+        
         buildable.forEach(b => {
             if(type !== 'all' && b.type !== type) return;
-
             const item = document.createElement('div');
             item.className = 'build-item';
             
             let locked = b.reqTech && !this.researched.includes(b.reqTech);
             if(this.selectedBuildingId === b.id) item.classList.add('selected');
             
-            // 리더 버프 적용된 가격
-            const finalCost = this.getBuildingCost(b);
-            const canAfford = this.money >= finalCost;
+            let cost = b.cost;
+            if(this.leader && this.leader.id === 'energy_expert' && b.type === 'energy') cost = Math.floor(cost * 0.8);
+            
+            if(this.money < cost || locked) item.classList.add('disabled');
 
-            if(!canAfford || locked) item.classList.add('disabled');
+            let sizeTag = (b.w > 1 || b.h > 1) ? `<span style="font-size:0.7em; border:1px solid #ccc; padding:1px 3px;">${b.w}x${b.h}</span>` : '';
 
-            let powerStat = b.power > 0 ? `<span class="stat-pos">⚡+${b.power}</span>` : (b.power < 0 ? `<span class="stat-neg">⚡${b.power}</span>` : '');
-            let emitStat = b.emit > 0 ? `<span class="stat-neg">♨️${b.emit}</span>` : (b.emit < 0 ? `<span class="stat-pos">🌱${Math.abs(b.emit)}</span>` : '');
-
-            // 가격 표시 (할인되면 색상 변경)
-            let costHtml = `💰 ${finalCost}`;
-            if(finalCost < b.cost) costHtml = `<span style="color:#2ecc71">💰 ${finalCost} (↓)</span>`;
-
-            let html = `
+            item.innerHTML = `
                 <div class="bi-icon">${b.icon}</div>
                 <div class="bi-info">
-                    <div class="bi-name">${b.name} ${locked ? '🔒' : ''}</div>`;
-            
-            if(locked) {
-                const reqName = RESEARCH.find(r=>r.id===b.reqTech).name;
-                html += `<div class="bi-desc" style="color:#e74c3c">필요: ${reqName}</div>`;
-            } else {
-                html += `<div class="bi-cost">${costHtml}</div>
-                         <div class="bi-desc">수익${b.rev} | ${emitStat} ${powerStat}</div>`;
-            }
-            html += `</div>`;
-            
-            item.innerHTML = html;
+                    <div class="bi-name">${b.name} ${sizeTag} ${locked ? '🔒' : ''}</div>
+                    <div class="bi-cost">💰 ${cost}</div>
+                    <div class="bi-desc">수익${b.rev} 탄소${b.emit}</div>
+                </div>
+            `;
             item.onclick = () => {
-                if(locked) { alert("연구가 필요합니다!"); return; }
-                if(this.money < finalCost) { alert("자금이 부족합니다."); return; }
+                if(locked) { alert("연구 필요"); return; }
+                if(this.money < cost) { alert("자금 부족"); return; }
                 this.selectBuilding(b.id);
             };
             this.ui.buildList.appendChild(item);
         });
+    }
+
+    selectBuilding(id) {
+        this.selectedBuildingId = id;
+        this.ui.cancelBtn.classList.remove('hidden');
+        this.filterBuild(BUILDINGS.find(b=>b.id===id).type);
+    }
+    cancelSelection() {
+        this.selectedBuildingId = null;
+        this.ui.cancelBtn.classList.add('hidden');
+        const activeTab = document.querySelector('.sub-tab-btn.active');
+        if(activeTab) this.filterBuild(activeTab.dataset.type);
+    }
+
+    switchMainTab(tab) {
+        ['panel-build', 'panel-research', 'panel-log'].forEach(id => document.getElementById(id).classList.add('hidden'));
+        document.getElementById(`panel-${tab}`).classList.remove('hidden');
     }
 
     renderResearch() {
@@ -248,7 +348,6 @@ class TycoonGame {
         RESEARCH.forEach(r => {
             const item = document.createElement('div');
             item.className = 'research-item';
-            
             const isDone = this.researched.includes(r.id);
             const locked = r.req && !this.researched.includes(r.req);
             
@@ -263,198 +362,157 @@ class TycoonGame {
                     <div class="bi-desc">${r.desc}</div>
                 </div>
             `;
-            
             item.onclick = () => {
                 if(isDone || locked || this.money < r.cost) return;
-                if(confirm(`${r.name} 연구를 진행하시겠습니까? (비용 ${r.cost})`)) {
+                if(confirm(`연구 진행? (${r.cost})`)) {
                     this.money -= r.cost;
                     this.researched.push(r.id);
-                    this.addLog(`🔬 기술 개발: ${r.name}`, 'good');
+                    this.addLog(`연구 완료: ${r.name}`);
                     this.updateHUD();
                     this.renderResearch();
-                    const activeTab = document.querySelector('.sub-tab-btn.active');
-                    if(activeTab) this.filterBuild(activeTab.dataset.type);
                 }
             };
             this.ui.researchList.appendChild(item);
         });
     }
 
-    selectBuilding(id) {
-        this.selectedBuildingId = id;
-        this.ui.cancelBtn.classList.remove('hidden');
-        this.filterBuild(BUILDINGS.find(b=>b.id===id).type);
-    }
-
-    cancelSelection() {
-        this.selectedBuildingId = null;
-        this.ui.cancelBtn.classList.add('hidden');
-        const activeTab = document.querySelector('.sub-tab-btn.active');
-        if(activeTab) this.filterBuild(activeTab.dataset.type);
-    }
-
-    build(idx, template, finalCost) {
-        this.money -= finalCost;
-        this.mapData[idx] = { ...template };
-        this.renderGrid();
-        this.updateHUD();
-        this.addLog(`${template.name} 건설 (-${finalCost})`);
-        this.showMessage(`${template.name} 건설 완료!`);
-    }
-
-    switchMainTab(tabName) {
-        ['panel-build', 'panel-research', 'panel-log'].forEach(id => document.getElementById(id).classList.add('hidden'));
-        document.getElementById(`panel-${tabName}`).classList.remove('hidden');
-        document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
-        if(event) event.target.classList.add('active');
-    }
-
-    addLog(msg, type='normal') {
-        const item = document.createElement('div');
-        item.className = `log-item ${type}`;
-        item.innerHTML = `<span style="opacity:0.6;">Y${this.year}</span> ${msg}`;
-        this.ui.logList.prepend(item);
-    }
-
-    showMessage(text) {
-        this.ui.msg.innerText = text;
-        this.ui.msg.style.opacity = 0.5;
-        setTimeout(() => this.ui.msg.style.opacity = 1, 100);
-    }
-
-    // --- 연말 정산 ---
+    // --- 연말 정산 & 룰렛 ---
     nextYear() {
-        if (this.year > GAME_CONFIG.MAX_YEARS) {
-            alert(`게임 종료! 최종 자산: ${this.money}`);
-            return;
-        }
+        if(this.year > GAME_CONFIG.MAX_YEARS) return;
+        
+        // 1. 룰렛 시작
+        this.ui.rouletteModal.classList.remove('hidden');
+        this.ui.rouletteText.classList.remove('hidden');
+        this.ui.rouletteRes.classList.add('hidden');
+        
+        let count = 0;
+        const interval = setInterval(() => {
+            const rndEvt = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+            this.ui.rouletteText.innerText = `🎲 ${rndEvt.name}...`;
+            count++;
+            if(count > 15) { // 1.5초 후 정지
+                clearInterval(interval);
+                this.calculateYear(EVENTS[Math.floor(Math.random() * EVENTS.length)]);
+            }
+        }, 100);
+    }
 
-        let totalRev = 0, totalExp = 0, baseEmit = 0, totalPower = 0;
-        let totalRep = 0;
-
-        this.mapData.forEach(b => {
-            if (b) {
-                // 경제 전문가: 수익 15% 증가
+    calculateYear(evt) {
+        // 실제 계산 로직
+        let totalRev=0, totalExp=0, baseEmit=0, totalPower=0;
+        
+        // 중복 계산 방지 (루트만 계산)
+        const countedIndices = new Set();
+        this.mapData.forEach((b, i) => {
+            if(b && b.rootIdx === i) {
                 let rev = b.rev;
-                if(this.leader && this.leader.id === 'economy_expert') {
-                    rev = Math.floor(rev * 1.15);
-                }
-                
+                if(this.leader.id === 'economy_expert') rev = Math.floor(rev * 1.15);
                 totalRev += rev;
                 totalExp += b.exp;
                 baseEmit += b.emit;
                 totalPower += b.power;
-                if(b.rep) totalRep += b.rep;
             }
         });
 
-        // 스모그 효과
+        // 스모그 (1x1 기준 인접 체크는 복잡하므로 단순화: 전체 배출량에 비례한 패널티로 대체하거나 생략)
+        // 이번 버전에서는 로직 단순화를 위해 스모그는 제외하거나, 타일별 루프를 다시 돌려야 함.
+        // 여기선 '전체 배출량이 높으면 추가 패널티'로 단순화
         let smogPenalty = 0;
-        for(let i=0; i<this.gridSize; i++) {
-            const b = this.mapData[i];
-            if(b && b.emit > 0) {
-                const neighbors = [i-1, i+1, i-10, i+10];
-                neighbors.forEach(nIdx => {
-                    if(i%10 === 0 && nIdx === i-1) return;
-                    if(i%10 === 9 && nIdx === i+1) return;
-                    if(nIdx >= 0 && nIdx < 100 && this.mapData[nIdx] && this.mapData[nIdx].emit > 0) {
-                        smogPenalty += 2;
-                    }
-                });
-            }
-        }
+        if(baseEmit > 50) smogPenalty = 10;
+
         let totalEmit = baseEmit + smogPenalty;
 
         // 전력 패널티
         if(totalPower < 0) {
-            const pCost = Math.abs(totalPower) * 5;
-            totalExp += pCost;
-            this.addLog(`⚡ 전력부족! 비상비용 -${pCost}`, 'bad');
+            totalExp += Math.abs(totalPower) * 5;
+            this.addLog("⚡ 전력 부족 패널티 발생", 'bad');
         }
 
-        const netEmit = Math.max(0, totalEmit); 
+        const netEmit = Math.max(0, totalEmit);
         let tax = Math.floor(netEmit * this.taxRate);
+        if(this.leader.id === 'climate_expert') tax = Math.floor(tax * 0.5);
 
-        // 기후 전문가: 탄소세 50% 감면
-        if(this.leader && this.leader.id === 'climate_expert') {
-            tax = Math.floor(tax * 0.5);
-        }
-
-        // 이벤트
-        let tempState = { money: this.money, rep: this.rep + totalRep, res: 0, weekEmit: netEmit, weekPower: totalPower };
-        const evt = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+        // 이벤트 적용
+        let tempState = { money: this.money, weekEmit: netEmit, weekPower: totalPower, rep: this.rep, res: 0 };
         const evtResult = evt.effect(tempState);
-        this.addLog(`🔔 ${evt.name}: ${evtResult}`);
         this.money = tempState.money;
 
-        // 최종 계산
+        // 최종
         const netProfit = totalRev - totalExp - tax;
         this.money += netProfit;
 
+        // UI 표시 (룰렛 결과창)
+        this.ui.rouletteText.classList.add('hidden');
+        this.ui.rouletteRes.classList.remove('hidden');
+        this.ui.rouletteDesc.innerHTML = `
+            <h3>${evt.name}</h3>
+            <p>${evtResult}</p>
+            <hr>
+            <p>매출: +${totalRev} / 유지: -${totalExp}</p>
+            <p>탄소세: -${tax} (배출 ${netEmit}t)</p>
+            <h3 style="color:${netProfit>=0?'green':'red'}">순이익: ${netProfit}</h3>
+        `;
+
+        this.pendingYearUpdate = { netProfit, netEmit }; // 확인 버튼 누르면 반영
+    }
+
+    finishYear() {
+        this.ui.rouletteModal.classList.add('hidden');
+        
         // 파산 체크
         if(this.money < 0) {
-            document.getElementById('final-score').innerText = `최종 기록: ${this.year}년차 파산`;
             document.getElementById('gameover-modal').classList.remove('hidden');
+            document.getElementById('final-score').innerText = `${this.year}년차 파산`;
             return;
         }
 
-        this.showReport(totalRev, totalExp, tax, netEmit, smogPenalty, evt, evtResult, netProfit);
-
         this.year++;
-        if(this.year % 5 === 1 && this.year > 1) {
+        if(this.year > GAME_CONFIG.MAX_YEARS) {
+            alert("게임 승리! 15년 임기를 마쳤습니다.");
+            return;
+        }
+        
+        if(this.year % 5 === 1) {
             this.taxRate += 1;
             this.addLog(`📢 탄소세율 인상 (x${this.taxRate})`, 'bad');
         }
-        
-        this.updateHUD();
-        // 건설 목록 갱신 (자금 변동)
-        if(!document.getElementById('panel-build').classList.contains('hidden')) {
-             const activeTab = document.querySelector('.sub-tab-btn.active');
-             if(activeTab) this.filterBuild(activeTab.dataset.type);
-        }
-    }
 
-    showReport(rev, exp, tax, emit, smog, evt, evtResult, netProfit) {
-        let html = `
-            <div class="report-row"><span>매출</span> <span>+${rev}</span></div>
-            <div class="report-row"><span>유지비</span> <span style="color:red">-${exp}</span></div>
-            <div class="report-row"><span>탄소세 (${emit}t)</span> <span style="color:red">-${tax}</span></div>
-        `;
-        if(smog > 0) html += `<div class="report-row" style="color:#e67e22; font-size:0.8rem">⚠️ 스모그(인접): 배출 +${smog}t</div>`;
-        if(this.leader) html += `<div class="report-row" style="color:#2ecc71; font-size:0.8rem">👤 리더 효과 적용됨</div>`;
-        
-        html += `
-            <div class="report-row" style="background:#f0f0f0; padding:4px;">
-                <span>🔔 ${evt.name}</span>
-                <span style="font-size:0.8rem">${evtResult}</span>
-            </div>
-            <div class="report-total">순이익: ${netProfit >= 0 ? '+' : ''}${netProfit}</div>
-            <div style="text-align:center; font-size:0.8rem; margin-top:5px;">현재 자금: ${this.money}</div>
-        `;
-        this.ui.reportBody.innerHTML = html;
-        document.getElementById('report-modal').classList.remove('hidden');
+        this.updateHUD();
+        this.addLog(`📅 ${this.year}년 시작`);
     }
 
     updateHUD() {
         this.ui.money.innerText = this.money;
-        this.ui.year.innerText = this.year <= GAME_CONFIG.MAX_YEARS ? this.year : "END";
+        this.ui.year.innerText = this.year;
         
-        let e=0, p=0, r=GAME_CONFIG.START_REP;
-        this.mapData.forEach(b => { if(b) { e+=b.emit; p+=b.power; if(b.rep) r+=b.rep; } });
+        let e=0, p=0;
+        this.mapData.forEach((b, i) => { 
+            if(b && b.rootIdx === i) { e+=b.emit; p+=b.power; } 
+        });
         
         this.ui.emit.innerText = `${e}t`;
-        
-        // 아이콘 중복 방지를 위해 숫자만 업데이트하고 색상 조정
         this.ui.infra.innerText = p; // 숫자만
         this.ui.infra.style.color = p<0 ? '#ff7675' : '#55efc4';
-        
-        this.ui.rep.innerText = r;
+        this.ui.rep.innerText = this.rep;
+    }
+
+    addLog(msg, type='normal') {
+        const d = document.createElement('div');
+        d.className = `log-item ${type}`;
+        d.innerText = msg;
+        this.ui.logList.prepend(d);
+    }
+    
+    showMessage(t) { 
+        this.ui.msg.innerText = t; 
+        this.ui.msg.style.opacity = 0.5; 
+        setTimeout(()=>this.ui.msg.style.opacity=1, 100); 
     }
 
     bindEvents() {
         document.getElementById('btn-next-week').onclick = () => this.nextYear();
         window.game = this; 
-        document.addEventListener('keydown', (e) => { if(e.key==='Escape') this.cancelSelection(); });
+        document.addEventListener('keydown', e => { if(e.key==='Escape') this.cancelSelection(); });
     }
 }
 
