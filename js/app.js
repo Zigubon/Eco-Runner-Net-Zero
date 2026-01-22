@@ -1,11 +1,11 @@
 /**
- * [2026-01-23] Eco Runner Game Engine (Fix Version)
- * 이슈 해결: 홈페이지 이식 시 캐릭터 좌표 이탈 문제 해결, 조작법 강화
+ * [2026-01-23] Eco Runner Game Engine (Final Fix)
+ * 설명: 멈춤 현상 수정(변수 참조 오류 해결), 루프 안정성 강화
  */
 
 import { CONFIG, OBSTACLES, ITEMS, UPGRADES, Logger } from './data.js';
 
-// === Storage & UI Manager (기존과 동일하지만, 안전을 위해 포함) ===
+// === Storage & UI Manager ===
 class StorageManager {
     static save(data) { localStorage.setItem('ecoRunnerData', JSON.stringify(data)); }
     static load() {
@@ -32,14 +32,12 @@ class UIManager {
     }
 
     showScreen(name) {
-        // 모든 스크린 숨기기
         ['intro', 'hud', 'gameover', 'shop'].forEach(k => {
             if (this.elements[k]) {
                 this.elements[k].classList.add('hidden');
                 this.elements[k].classList.remove('active');
             }
         });
-        // 타겟 스크린 보이기
         if (this.elements[name]) {
             this.elements[name].classList.remove('hidden');
             this.elements[name].classList.add('active');
@@ -65,17 +63,44 @@ class UIManager {
         setTimeout(() => toast.remove(), 2500);
     }
     
-    // 상점 렌더링 로직은 길이상 생략 (기존 유지)
-    renderShop(playerData, buyCallback) { /* 기존 코드 유지 */ }
+    renderShop(playerData, buyCallback) {
+        if(!this.elements.shopCoins) return;
+        this.elements.shopCoins.textContent = playerData.coins;
+        this.elements.shopContainer.innerHTML = '';
+
+        UPGRADES.forEach(item => {
+            const currentLevel = playerData.upgrades[item.id] || 0;
+            const cost = item.baseCost * (currentLevel + 1);
+            const isMax = currentLevel >= item.maxLevel;
+
+            const div = document.createElement('div');
+            div.className = `shop-item ${isMax ? 'locked' : ''}`;
+            div.innerHTML = `
+                <h3>${item.name}</h3>
+                <p>${item.desc}</p>
+                <p>Lv. ${currentLevel} / ${item.maxLevel}</p>
+                <button class="btn primary small">${isMax ? 'MAX' : cost + ' EP'}</button>
+            `;
+            
+            div.onclick = () => {
+                if (!isMax && playerData.coins >= cost) {
+                    buyCallback(item.id, cost);
+                } else if (playerData.coins < cost) {
+                    this.showToast('포인트가 부족합니다!');
+                }
+            };
+            this.elements.shopContainer.appendChild(div);
+        });
+    }
 }
 
-// === 캐릭터 클래스 (좌표 수정됨) ===
+// === Player Class ===
 class Player {
     constructor(canvasHeight, upgrades) {
         this.width = 44; 
         this.height = 44;
         this.x = 50; 
-        // [중요 수정] 바닥 높이 계산을 캔버스 높이 기준으로 고정 (하단 100px 위)
+        // 바닥 위치를 캔버스 하단 100px 위로 고정
         this.groundY = canvasHeight - 100 - this.height; 
         this.y = this.groundY;
         this.dy = 0;
@@ -98,7 +123,6 @@ class Player {
         this.dy += CONFIG.GRAVITY;
         this.y += this.dy;
 
-        // 바닥 충돌 처리
         if (this.y > this.groundY) {
             this.y = this.groundY;
             this.dy = 0;
@@ -109,10 +133,9 @@ class Player {
 
     draw(ctx) {
         ctx.fillStyle = this.color;
-        // 캐릭터 본체
         ctx.fillRect(this.x, this.y, this.width, this.height);
         
-        // 눈 (시각적 확인용)
+        // 눈 그리기 (방향 확인용)
         ctx.fillStyle = 'white';
         ctx.fillRect(this.x + 24, this.y + 10, 12, 12);
         ctx.fillStyle = 'black';
@@ -120,7 +143,7 @@ class Player {
     }
 }
 
-// === 장애물/아이템 클래스 ===
+// === GameObject Class ===
 class GameObject {
     constructor(def, canvasWidth, canvasHeight) {
         this.def = def;
@@ -128,10 +151,10 @@ class GameObject {
         this.width = def.width;
         this.height = def.height;
         this.markedForDeletion = false;
+        this.collisionProcessed = false;
 
-        // [중요 수정] Y 좌표 계산을 캔버스 높이 기준으로 변경
         if (def.yPos === 'air') {
-            this.y = canvasHeight - 200 - Math.random() * 80;
+            this.y = canvasHeight - 220 - Math.random() * 80;
         } else if (def.yPos === 'ground' || !def.yPos) {
             this.y = canvasHeight - 100 - this.height;
         } else {
@@ -156,22 +179,24 @@ class GameObject {
     }
 }
 
-// === 메인 게임 클래스 ===
+// === Main Game Class ===
 class Game {
     constructor() {
         this.canvas = document.getElementById('game-canvas');
+        if (!this.canvas) {
+            console.error("Canvas not found!");
+            return;
+        }
         this.ctx = this.canvas.getContext('2d');
         this.ui = new UIManager();
         
-        // [중요 수정] window.innerWidth 대신 canvas의 실제 렌더링 크기 참조
-        // 이를 통해 iframe이나 div 안에 있어도 크기가 맞게 설정됨
+        // 초기화
         this.resize();
         window.addEventListener('resize', () => this.resize());
         
         this.state = 'INTRO'; 
         this.userData = StorageManager.load();
         
-        // 최초 1회 리셋
         this.player = new Player(this.height, this.userData.upgrades);
         this.obstacles = [];
         this.items = [];
@@ -179,20 +204,23 @@ class Game {
         
         this.bindEvents();
         
-        // 루프 시작
+        // 애니메이션 루프 시작
         this.lastTime = 0;
         requestAnimationFrame(this.animate.bind(this));
-        
-        Logger.info('게임 엔진 로드 완료 (홈페이지 호환 모드)');
     }
 
     resize() {
-        // 컨테이너 크기에 맞춰 캔버스 해상도 조정
+        // 부모 컨테이너 크기에 맞춤
         const container = this.canvas.parentElement;
-        this.width = this.canvas.width = container.clientWidth;
-        this.height = this.canvas.height = container.clientHeight;
+        if (container) {
+            this.width = this.canvas.width = container.clientWidth;
+            this.height = this.canvas.height = container.clientHeight;
+        } else {
+            this.width = this.canvas.width = window.innerWidth;
+            this.height = this.canvas.height = window.innerHeight;
+        }
         
-        // 리사이즈 시 플레이어 위치 재보정 (게임 중일 경우)
+        // 리사이즈 시 플레이어 바닥 위치 재조정
         if (this.player) {
             this.player.groundY = this.height - 100 - this.player.height;
             if(!this.player.isJumping) this.player.y = this.player.groundY;
@@ -215,44 +243,44 @@ class Game {
         // 키보드 점프
         window.addEventListener('keydown', (e) => {
             if ((e.code === 'Space' || e.code === 'ArrowUp') && this.state === 'PLAYING') {
-                e.preventDefault(); // 스크롤 방지
+                e.preventDefault();
                 this.player.jump();
             }
         });
 
-        // [추가] 마우스/터치 점프 (캔버스 클릭 시)
-        this.canvas.addEventListener('mousedown', (e) => {
+        // 마우스/터치 점프
+        const jumpAction = (e) => {
             if (this.state === 'PLAYING') {
+                e.preventDefault(); // 더블탭 확대 방지 등
                 this.player.jump();
             }
-        });
-        
-        // 모바일 터치 대응
-        this.canvas.addEventListener('touchstart', (e) => {
-            if (this.state === 'PLAYING') {
-                e.preventDefault(); // 터치 확대 방지
-                this.player.jump();
-            }
-        }, { passive: false });
+        };
+        this.canvas.addEventListener('mousedown', jumpAction);
+        this.canvas.addEventListener('touchstart', jumpAction, { passive: false });
 
         // UI 버튼
-        const safeBind = (id, fn) => {
+        const bindBtn = (id, fn) => {
             const el = document.getElementById(id);
             if(el) el.addEventListener('click', fn);
         };
 
-        safeBind('btn-start', () => this.startGame());
-        safeBind('btn-restart', () => this.startGame());
-        safeBind('btn-home', () => this.goHome());
-        safeBind('btn-shop', () => { /* 상점 로직 */ });
-        safeBind('btn-close-shop', () => this.goHome());
+        bindBtn('btn-start', () => this.startGame());
+        bindBtn('btn-restart', () => this.startGame());
+        bindBtn('btn-home', () => this.goHome());
+        
+        bindBtn('btn-shop', () => {
+            this.ui.showScreen('shop');
+            this.ui.renderShop(this.userData, (id, cost) => this.buyUpgrade(id, cost));
+        });
+        bindBtn('btn-close-shop', () => this.goHome());
     }
 
     startGame() {
-        this.resize(); // 시작 전 크기 확실히 재계산
+        this.resize();
         this.reset();
         this.state = 'PLAYING';
         this.ui.showScreen('hud');
+        console.log("Game Started!");
     }
 
     goHome() {
@@ -260,12 +288,19 @@ class Game {
         this.ui.showScreen('intro');
     }
 
+    buyUpgrade(id, cost) {
+        this.userData.coins -= cost;
+        this.userData.upgrades[id] = (this.userData.upgrades[id] || 0) + 1;
+        StorageManager.save(this.userData);
+        this.ui.renderShop(this.userData, (i, c) => this.buyUpgrade(i, c));
+        this.ui.showToast('업그레이드 완료!');
+    }
+
     gameOver() {
         this.state = 'GAMEOVER';
         this.userData.coins += this.sessionCoins;
         StorageManager.save(this.userData);
         
-        // 안전한 DOM 업데이트
         const finalScoreEl = document.getElementById('final-score');
         const finalCoinsEl = document.getElementById('final-coins');
         if(finalScoreEl) finalScoreEl.textContent = Math.floor(this.score);
@@ -289,6 +324,9 @@ class Game {
     update(deltaTime) {
         if (this.state !== 'PLAYING') return;
 
+        // 속도 제한 (프레임 드랍 시 텔레포트 방지)
+        const safeDelta = Math.min(deltaTime, 50);
+
         if (this.gameSpeed < CONFIG.GAME_SPEED_MAX) this.gameSpeed += 0.001;
         this.co2Level += (CONFIG.CO2_PASSIVE_INCREASE - this.passiveCo2Reduction);
         
@@ -306,39 +344,49 @@ class Game {
         this.obstacles.forEach(o => o.update(this.gameSpeed));
         this.items.forEach(i => i.update(this.gameSpeed));
         
-        // 화면 밖 객체 제거 및 충돌 체크
+        // [수정 완료] 여기서 o 대신 i를 써야 멈추지 않습니다!
         this.obstacles = this.obstacles.filter(o => !o.markedForDeletion);
-        this.items = this.items.filter(i => !o.markedForDeletion); // [이전 버그 수정됨 i vs o]
+        this.items = this.items.filter(i => !i.markedForDeletion); 
 
-        this.checkCollisions(); // 충돌 로직은 분량상 생략 (기존과 동일하다고 가정)
+        this.checkCollisions();
         this.ui.updateHUD(this.score, this.sessionCoins, this.co2Level);
     }
 
     checkCollisions() {
-        // 간단 충돌 체크 (기존 로직 포함 필요)
         const p = this.player;
         
+        // 장애물
         this.obstacles.forEach(obs => {
             if (!obs.collisionProcessed && 
                 p.x < obs.x + obs.width && p.x + p.width > obs.x &&
                 p.y < obs.y + obs.height && p.y + p.height > obs.y) {
                 
                 obs.collisionProcessed = true;
-                this.co2Level += obs.def.damage;
+                
+                let damage = obs.def.damage;
+                const filterLevel = this.userData.upgrades.filter || 0;
+                damage = damage * (1 - (filterLevel * 0.1));
+
+                this.co2Level += damage;
                 this.ui.showToast(`⚠️ ${obs.def.name} 충돌!`);
             }
         });
         
+        // 아이템
         this.items.forEach((item, index) => {
              if (p.x < item.x + item.width && p.x + p.width > item.x &&
                 p.y < item.y + item.height && p.y + p.height > item.y) {
                 
-                this.items.splice(index, 1);
+                // 즉시 제거 처리
+                item.markedForDeletion = true;
+                
                 if (item.def.currency) {
                     this.sessionCoins += item.def.currency;
+                    this.ui.showToast(`💰 +${item.def.currency}`);
                 } else {
                     this.score += item.def.score;
                     this.co2Level = Math.max(0, this.co2Level - item.def.co2Reduction);
+                    this.ui.showToast(`🌿 ${item.def.name} 획득!`);
                 }
             }
         });
@@ -347,7 +395,7 @@ class Game {
     draw() {
         this.ctx.clearRect(0, 0, this.width, this.height);
 
-        // 지면 그리기 (반응형)
+        // 지면
         this.ctx.fillStyle = '#4CAF50';
         this.ctx.fillRect(0, this.height - 100, this.width, 100);
 
@@ -362,14 +410,19 @@ class Game {
         const deltaTime = timeStamp - this.lastTime;
         this.lastTime = timeStamp;
 
-        this.update(deltaTime);
-        this.draw();
+        try {
+            this.update(deltaTime);
+            this.draw();
+        } catch (e) {
+            console.error("Game Loop Error:", e);
+            // 에러가 나도 루프가 멈추지 않도록 재시도하거나 상태를 변경
+            // 개발 중엔 여기서 멈추는 게 낫지만, 배포용에선 재시작 유도
+        }
         
         requestAnimationFrame(this.animate.bind(this));
     }
 }
 
-// 게임 인스턴스 시작
 window.onload = () => {
     new Game();
 };
