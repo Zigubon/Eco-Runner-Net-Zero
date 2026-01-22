@@ -3,29 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Net Zero City V3.0</title>
+    <title>Net Zero City</title>
     <link rel="stylesheet" href="style.css">
+    <script type="module" src="js/app.js" defer></script>
 </head>
 <body>
+
     <div id="intro-screen" class="intro-overlay">
         <div class="intro-content">
             <h1 class="intro-logo">🏙️ Net Zero City</h1>
-            <p class="intro-desc">당신은 새로 부임한 시장입니다.<br>파산하지 않고 15년 동안 탄소 중립 도시를 만드세요.</p>
+            <p class="intro-desc">
+                지속 가능한 미래 도시를 건설하세요.<br>
+                15년 동안 파산하지 않고 탄소 중립을 달성해야 합니다.
+            </p>
             
-            <div class="intro-guide">
-                <h3>🎮 게임 방법</h3>
-                <ul>
-                    <li><strong>🏗️ 건설:</strong> 우측 패널에서 건물을 선택하고 땅을 클릭하세요.</li>
-                    <li><strong>⚡ 전력:</strong> 대형 건물은 전력을 많이 소모합니다. 발전소를 먼저 지으세요.</li>
-                    <li><strong>📐 대형 건물:</strong> 2x2 건물은 넓은 땅이 필요합니다.</li>
-                    <li><strong>🎲 이벤트:</strong> 매년 말, 룰렛을 돌려 랜덤 이벤트가 발생합니다.</li>
-                </ul>
-            </div>
-
-            <div class="intro-leader">
-                <h3>👤 리더 선택</h3>
-                <div class="leader-select-grid" id="intro-leader-list">
-                    </div>
+            <div class="intro-selection">
+                <h3>👤 시장(Leader)을 선택하세요</h3>
+                <div class="leader-grid" id="intro-leader-list"></div>
             </div>
             
             <button id="btn-start-game" class="btn-start" disabled>리더를 선택해주세요</button>
@@ -33,89 +27,113 @@
     </div>
 
     <div class="layout-container">
+        
         <div class="main-area">
             <header class="hud">
-                <div class="hud-top">
+                <div class="hud-left">
                     <span class="logo">🌿 Net Zero City</span>
                     <span class="week-badge">Year <span id="ui-year">1</span></span>
                 </div>
+                
                 <div class="stats-bar">
-                    <div class="stat-item" title="예산">💰 <span id="ui-money">0</span></div>
-                    <div class="stat-item" title="주간 배출량">🏭 <span id="ui-emit" class="danger">0t</span></div>
-                    <div class="stat-item" title="만족도">⭐ <span id="ui-rep">0</span></div>
-                    <div class="stat-item" title="전력망 상태">⚡ <span id="ui-infra">0</span></div>
+                    <div class="stat-item" title="보유 자금">
+                        💰 <span id="ui-money" class="val">0</span>
+                    </div>
+                    <div class="stat-item" title="주간 탄소 배출량">
+                        🏭 <span id="ui-emit" class="val danger">0t</span>
+                    </div>
+                    <div class="stat-item" title="도시 만족도">
+                        ⭐ <span id="ui-rep" class="val">0</span>
+                    </div>
+                    <div class="stat-item" title="전력망 상태 (생산 - 소비)">
+                        ⚡ <span id="ui-infra" class="val">0</span>
+                    </div>
+                </div>
+
+                <div class="hud-right">
+                    <button class="btn-icon" onclick="openHelp()" title="도움말">❓</button>
                 </div>
             </header>
 
             <main class="city-viewport">
                 <div class="city-grid" id="city-grid"></div>
-                <div id="tooltip" class="tooltip hidden"></div>
                 
-                <div class="game-guide-mini">
-                    <small>Tip: 우측클릭으로 건설 취소</small>
-                </div>
+                <div id="tooltip" class="tooltip hidden"></div>
             </main>
 
             <footer class="msg-bar">
-                <div id="ui-message">도시를 재건하세요!</div>
+                <div id="ui-message">도시 건설을 시작하세요!</div>
             </footer>
         </div>
 
         <aside class="side-panel">
             <div class="main-tabs">
-                <button class="main-tab-btn active" onclick="game.switchMainTab('build')">🏗️ 건설</button>
-                <button class="main-tab-btn" onclick="game.switchMainTab('research')">🔬 연구</button>
-                <button class="main-tab-btn" onclick="game.switchMainTab('log')">📜 기록</button>
+                <button class="main-tab-btn active" onclick="window.game.switchMainTab('build')">🏗️ 건설</button>
+                <button class="main-tab-btn" onclick="window.game.switchMainTab('research')">🔬 연구</button>
+                <button class="main-tab-btn" onclick="window.game.switchMainTab('log')">📜 기록</button>
             </div>
 
             <div id="panel-build" class="panel-content">
                 <div class="sub-tabs">
-                    <button class="sub-tab-btn active" data-type="growth" onclick="game.filterBuild('growth')">성장</button>
-                    <button class="sub-tab-btn" data-type="energy" onclick="game.filterBuild('energy')">에너지</button>
-                    <button class="sub-tab-btn" data-type="circular" onclick="game.filterBuild('circular')">순환</button>
-                    <button class="sub-tab-btn" data-type="infra" onclick="game.filterBuild('infra')">인프라</button>
+                    <button class="sub-tab-btn active" data-type="growth" onclick="window.game.filterBuild('growth')">성장</button>
+                    <button class="sub-tab-btn" data-type="energy" onclick="window.game.filterBuild('energy')">에너지</button>
+                    <button class="sub-tab-btn" data-type="circular" onclick="window.game.filterBuild('circular')">순환</button>
+                    <button class="sub-tab-btn" data-type="infra" onclick="window.game.filterBuild('infra')">인프라</button>
                 </div>
-                <div class="building-list" id="building-list"></div>
+                <div class="list-container" id="building-list"></div>
             </div>
 
             <div id="panel-research" class="panel-content hidden">
-                <div class="building-list" id="research-list"></div>
+                <div class="list-container" id="research-list"></div>
             </div>
 
             <div id="panel-log" class="panel-content hidden">
-                <div class="log-list" id="log-list"></div>
+                <div class="list-container" id="log-list"></div>
             </div>
 
             <div class="panel-footer">
-                <button id="btn-cancel-select" class="btn-secondary hidden" onclick="game.cancelSelection()">선택 취소 (ESC)</button>
-                <button id="btn-next-week" class="btn-main">📅 연말 정산</button>
+                <button id="btn-cancel-select" class="btn-secondary hidden" onclick="window.game.cancelSelection()">선택 취소 (ESC)</button>
+                <button id="btn-next-week" class="btn-main">📅 연말 정산 (Next Year)</button>
             </div>
         </aside>
     </div>
 
     <div id="roulette-modal" class="modal hidden">
-        <div class="modal-content roulette-content">
-            <h3>📅 연말 이벤트 추첨</h3>
+        <div class="modal-content">
+            <h3>📅 연말 이벤트</h3>
             <div class="roulette-box">
-                <div id="roulette-display" class="roulette-text">🎲 이벤트를 추첨중...</div>
+                <div id="roulette-display">🎲 추첨 중...</div>
             </div>
             <div id="roulette-result" class="hidden">
-                <p id="roulette-desc" class="event-desc"></p>
-                <button class="btn-main" onclick="game.finishYear()">결과 확인</button>
+                <p id="roulette-desc"></p>
+                <button class="btn-main" onclick="window.game.finishYear()">결과 확인</button>
             </div>
         </div>
     </div>
 
     <div id="report-modal" class="modal hidden">
-        <div class="modal-content report-content">
-            <h3>📊 연말 결산 리포트</h3>
+        <div class="modal-content">
+            <h3>📊 결산 리포트</h3>
             <div id="report-details" class="report-body"></div>
-            <button class="btn-main" onclick="closeReport()">다음 해 시작</button>
+            <button class="btn-main" onclick="closeModal('report-modal')">다음 해 시작</button>
         </div>
     </div>
     
+    <div id="help-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>ℹ️ 게임 가이드</h3>
+            <ul style="text-align: left; font-size: 0.9rem; line-height: 1.6;">
+                <li><strong>⚡ 전력 관리:</strong> 전력이 마이너스가 되면 유지비가 폭증합니다.</li>
+                <li><strong>☠️ 스모그 효과:</strong> 오염 건물을 붙여 지으면 배출량이 추가로 늘어납니다.</li>
+                <li><strong>🏗️ 철거/재건축:</strong> 기존 건물을 클릭하면 철거할 수 있습니다. (초기 오염 유산은 필수 철거!)</li>
+                <li><strong>🔬 연구:</strong> 연구를 통해 고효율 건물을 해금하세요.</li>
+            </ul>
+            <button class="btn-secondary" onclick="closeModal('help-modal')">닫기</button>
+        </div>
+    </div>
+
     <div id="gameover-modal" class="modal hidden">
-        <div class="modal-content" style="border-color: #e74c3c;">
+        <div class="modal-content" style="border: 2px solid #e74c3c;">
             <h2 style="color:#e74c3c">💸 파산했습니다!</h2>
             <p>예산이 바닥나 도시 운영이 중단되었습니다.</p>
             <p id="final-score" style="font-weight:bold; margin:20px 0;"></p>
@@ -123,9 +141,9 @@
         </div>
     </div>
 
-    <script type="module" src="js/app.js"></script>
     <script>
-        function closeReport() { document.getElementById('report-modal').classList.add('hidden'); }
+        function openHelp() { document.getElementById('help-modal').classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
     </script>
 </body>
 </html>
