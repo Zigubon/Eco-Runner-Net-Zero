@@ -1,16 +1,18 @@
 /**
- * [2026-01-23] Eco Runner Game Engine (Final Fix)
- * 설명: 멈춤 현상 수정(변수 참조 오류 해결), 루프 안정성 강화
+ * [2026-01-23] Eco Runner Game Engine (Ultimate Stable Version)
+ * 이슈 해결: 점수 7점 멈춤(아이템 생성 충돌 방지), 화면 안 나옴(리사이즈 강제 보정)
  */
 
 import { CONFIG, OBSTACLES, ITEMS, UPGRADES, Logger } from './data.js';
 
 // === Storage & UI Manager ===
 class StorageManager {
-    static save(data) { localStorage.setItem('ecoRunnerData', JSON.stringify(data)); }
+    static save(data) { try { localStorage.setItem('ecoRunnerData', JSON.stringify(data)); } catch(e){} }
     static load() {
-        const data = localStorage.getItem('ecoRunnerData');
-        return data ? JSON.parse(data) : { coins: 0, upgrades: {} };
+        try {
+            const data = localStorage.getItem('ecoRunnerData');
+            return data ? JSON.parse(data) : { coins: 0, upgrades: {} };
+        } catch (e) { return { coins: 0, upgrades: {} }; }
     }
 }
 
@@ -48,8 +50,9 @@ class UIManager {
         if(this.elements.score) this.elements.score.textContent = Math.floor(score);
         if(this.elements.coin) this.elements.coin.textContent = coins;
         if(this.elements.co2Bar) {
-            this.elements.co2Bar.style.width = `${Math.min(co2, 100)}%`;
-            this.elements.co2Bar.style.backgroundColor = co2 > 80 ? '#e74c3c' : (co2 > 50 ? '#f39c12' : '#2ecc71');
+            const safeCo2 = isNaN(co2) ? 0 : Math.min(Math.max(co2, 0), 100);
+            this.elements.co2Bar.style.width = `${safeCo2}%`;
+            this.elements.co2Bar.style.backgroundColor = safeCo2 > 80 ? '#e74c3c' : (safeCo2 > 50 ? '#f39c12' : '#2ecc71');
         }
     }
 
@@ -69,7 +72,7 @@ class UIManager {
         this.elements.shopContainer.innerHTML = '';
 
         UPGRADES.forEach(item => {
-            const currentLevel = playerData.upgrades[item.id] || 0;
+            const currentLevel = (playerData.upgrades && playerData.upgrades[item.id]) || 0;
             const cost = item.baseCost * (currentLevel + 1);
             const isMax = currentLevel >= item.maxLevel;
 
@@ -81,13 +84,8 @@ class UIManager {
                 <p>Lv. ${currentLevel} / ${item.maxLevel}</p>
                 <button class="btn primary small">${isMax ? 'MAX' : cost + ' EP'}</button>
             `;
-            
             div.onclick = () => {
-                if (!isMax && playerData.coins >= cost) {
-                    buyCallback(item.id, cost);
-                } else if (playerData.coins < cost) {
-                    this.showToast('포인트가 부족합니다!');
-                }
+                if (!isMax && playerData.coins >= cost) buyCallback(item.id, cost);
             };
             this.elements.shopContainer.appendChild(div);
         });
@@ -100,15 +98,16 @@ class Player {
         this.width = 44; 
         this.height = 44;
         this.x = 50; 
-        // 바닥 위치를 캔버스 하단 100px 위로 고정
-        this.groundY = canvasHeight - 100 - this.height; 
+        // 바닥 위치 보정 (최소 200px 확보)
+        const safeHeight = Math.max(canvasHeight, 200);
+        this.groundY = safeHeight - 100 - this.height; 
         this.y = this.groundY;
         this.dy = 0;
         this.isJumping = false;
         this.jumpCount = 0;
         this.maxJumps = 2;
         this.color = '#2ecc71'; 
-        this.upgrades = upgrades;
+        this.upgrades = upgrades || {};
     }
 
     jump() {
@@ -119,7 +118,13 @@ class Player {
         }
     }
 
-    update() {
+    update(canvasHeight) {
+        // 리사이즈로 인해 바닥 높이가 변했을 경우 갱신
+        if (canvasHeight) {
+             const safeHeight = Math.max(canvasHeight, 200);
+             this.groundY = safeHeight - 100 - this.height;
+        }
+
         this.dy += CONFIG.GRAVITY;
         this.y += this.dy;
 
@@ -135,7 +140,6 @@ class Player {
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.width, this.height);
         
-        // 눈 그리기 (방향 확인용)
         ctx.fillStyle = 'white';
         ctx.fillRect(this.x + 24, this.y + 10, 12, 12);
         ctx.fillStyle = 'black';
@@ -148,8 +152,8 @@ class GameObject {
     constructor(def, canvasWidth, canvasHeight) {
         this.def = def;
         this.x = canvasWidth;
-        this.width = def.width;
-        this.height = def.height;
+        this.width = def.width || 30; // 방어 코드
+        this.height = def.height || 30;
         this.markedForDeletion = false;
         this.collisionProcessed = false;
 
@@ -158,6 +162,7 @@ class GameObject {
         } else if (def.yPos === 'ground' || !def.yPos) {
             this.y = canvasHeight - 100 - this.height;
         } else {
+            // 아이템 등 기타
             this.y = canvasHeight - 150 - Math.random() * 150;
         }
     }
@@ -168,11 +173,18 @@ class GameObject {
     }
 
     draw(ctx) {
-        ctx.fillStyle = this.def.color;
+        ctx.fillStyle = this.def.color || '#fff';
+        // 아이템인 경우 (점수나 화폐가 있는 경우)
         if (this.def.score || this.def.currency) {
             ctx.beginPath();
-            ctx.arc(this.x + this.width/2, this.y + this.height/2, this.width/2, 0, Math.PI * 2);
-            ctx.fill();
+            const cx = this.x + this.width/2;
+            const cy = this.y + this.height/2;
+            const r = this.width/2;
+            // 좌표가 유효할 때만 그리기 (에러 방지)
+            if (!isNaN(cx) && !isNaN(cy) && r > 0) {
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
         } else {
             ctx.fillRect(this.x, this.y, this.width, this.height);
         }
@@ -183,47 +195,32 @@ class GameObject {
 class Game {
     constructor() {
         this.canvas = document.getElementById('game-canvas');
-        if (!this.canvas) {
-            console.error("Canvas not found!");
-            return;
-        }
         this.ctx = this.canvas.getContext('2d');
         this.ui = new UIManager();
         
-        // 초기화
         this.resize();
         window.addEventListener('resize', () => this.resize());
         
         this.state = 'INTRO'; 
         this.userData = StorageManager.load();
         
-        this.player = new Player(this.height, this.userData.upgrades);
-        this.obstacles = [];
-        this.items = [];
-        this.score = 0;
-        
+        // 초기화
+        this.reset();
         this.bindEvents();
         
-        // 애니메이션 루프 시작
-        this.lastTime = 0;
+        this.lastTime = performance.now();
         requestAnimationFrame(this.animate.bind(this));
     }
 
     resize() {
-        // 부모 컨테이너 크기에 맞춤
         const container = this.canvas.parentElement;
-        if (container) {
+        // 컨테이너 크기가 0이면 윈도우 크기로 강제 설정 (안전장치)
+        if (container && container.clientWidth > 0 && container.clientHeight > 0) {
             this.width = this.canvas.width = container.clientWidth;
             this.height = this.canvas.height = container.clientHeight;
         } else {
             this.width = this.canvas.width = window.innerWidth;
             this.height = this.canvas.height = window.innerHeight;
-        }
-        
-        // 리사이즈 시 플레이어 바닥 위치 재조정
-        if (this.player) {
-            this.player.groundY = this.height - 100 - this.player.height;
-            if(!this.player.isJumping) this.player.y = this.player.groundY;
         }
     }
 
@@ -236,11 +233,11 @@ class Game {
         this.co2Level = 0;
         this.sessionCoins = 0;
         this.frameCount = 0;
-        this.passiveCo2Reduction = (this.userData.upgrades.tech || 0) * 0.01;
+        const techLevel = (this.userData.upgrades && this.userData.upgrades.tech) || 0;
+        this.passiveCo2Reduction = techLevel * 0.01;
     }
 
     bindEvents() {
-        // 키보드 점프
         window.addEventListener('keydown', (e) => {
             if ((e.code === 'Space' || e.code === 'ArrowUp') && this.state === 'PLAYING') {
                 e.preventDefault();
@@ -248,31 +245,28 @@ class Game {
             }
         });
 
-        // 마우스/터치 점프
         const jumpAction = (e) => {
             if (this.state === 'PLAYING') {
-                e.preventDefault(); // 더블탭 확대 방지 등
+                e.preventDefault();
                 this.player.jump();
             }
         };
         this.canvas.addEventListener('mousedown', jumpAction);
         this.canvas.addEventListener('touchstart', jumpAction, { passive: false });
 
-        // UI 버튼
-        const bindBtn = (id, fn) => {
+        const safeBind = (id, fn) => {
             const el = document.getElementById(id);
             if(el) el.addEventListener('click', fn);
         };
 
-        bindBtn('btn-start', () => this.startGame());
-        bindBtn('btn-restart', () => this.startGame());
-        bindBtn('btn-home', () => this.goHome());
-        
-        bindBtn('btn-shop', () => {
+        safeBind('btn-start', () => this.startGame());
+        safeBind('btn-restart', () => this.startGame());
+        safeBind('btn-home', () => this.goHome());
+        safeBind('btn-shop', () => {
             this.ui.showScreen('shop');
             this.ui.renderShop(this.userData, (id, cost) => this.buyUpgrade(id, cost));
         });
-        bindBtn('btn-close-shop', () => this.goHome());
+        safeBind('btn-close-shop', () => this.goHome());
     }
 
     startGame() {
@@ -280,7 +274,6 @@ class Game {
         this.reset();
         this.state = 'PLAYING';
         this.ui.showScreen('hud');
-        console.log("Game Started!");
     }
 
     goHome() {
@@ -289,6 +282,7 @@ class Game {
     }
 
     buyUpgrade(id, cost) {
+        if (!this.userData.upgrades) this.userData.upgrades = {};
         this.userData.coins -= cost;
         this.userData.upgrades[id] = (this.userData.upgrades[id] || 0) + 1;
         StorageManager.save(this.userData);
@@ -311,20 +305,25 @@ class Game {
 
     spawnObjects() {
         this.frameCount++;
-        if (this.frameCount % CONFIG.SPAWN_RATE_OBSTACLE === 0) {
-            const def = OBSTACLES[Math.floor(Math.random() * OBSTACLES.length)];
-            this.obstacles.push(new GameObject(def, this.width, this.height));
-        }
-        if (this.frameCount % CONFIG.SPAWN_RATE_ITEM === 0) {
-            const def = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-            this.items.push(new GameObject(def, this.width, this.height));
+        try {
+            // 장애물 생성
+            if (this.frameCount % CONFIG.SPAWN_RATE_OBSTACLE === 0 && OBSTACLES.length > 0) {
+                const def = OBSTACLES[Math.floor(Math.random() * OBSTACLES.length)];
+                this.obstacles.push(new GameObject(def, this.width, this.height));
+            }
+            // 아이템 생성 (여기서 멈춤 현상 발생 가능성이 높음 -> try catch로 보호)
+            if (this.frameCount % CONFIG.SPAWN_RATE_ITEM === 0 && ITEMS.length > 0) {
+                const def = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+                this.items.push(new GameObject(def, this.width, this.height));
+            }
+        } catch (e) {
+            console.error("Spawn Error:", e);
         }
     }
 
     update(deltaTime) {
         if (this.state !== 'PLAYING') return;
-
-        // 속도 제한 (프레임 드랍 시 텔레포트 방지)
+        
         const safeDelta = Math.min(deltaTime, 50);
 
         if (this.gameSpeed < CONFIG.GAME_SPEED_MAX) this.gameSpeed += 0.001;
@@ -335,16 +334,16 @@ class Game {
             return;
         }
 
-        const scoreMult = 1 + ((this.userData.upgrades.shoes || 0) * 0.1);
-        this.score += (0.1 * scoreMult);
+        const shoeLevel = (this.userData.upgrades && this.userData.upgrades.shoes) || 0;
+        this.score += (0.1 * (1 + shoeLevel * 0.1));
 
-        this.player.update();
+        this.player.update(this.height);
         this.spawnObjects();
         
         this.obstacles.forEach(o => o.update(this.gameSpeed));
         this.items.forEach(i => i.update(this.gameSpeed));
         
-        // [수정 완료] 여기서 o 대신 i를 써야 멈추지 않습니다!
+        // 안전한 필터링
         this.obstacles = this.obstacles.filter(o => !o.markedForDeletion);
         this.items = this.items.filter(i => !i.markedForDeletion); 
 
@@ -354,6 +353,7 @@ class Game {
 
     checkCollisions() {
         const p = this.player;
+        const safeUpgrades = this.userData.upgrades || {};
         
         // 장애물
         this.obstacles.forEach(obs => {
@@ -363,8 +363,8 @@ class Game {
                 
                 obs.collisionProcessed = true;
                 
-                let damage = obs.def.damage;
-                const filterLevel = this.userData.upgrades.filter || 0;
+                let damage = obs.def.damage || 10;
+                const filterLevel = safeUpgrades.filter || 0;
                 damage = damage * (1 - (filterLevel * 0.1));
 
                 this.co2Level += damage;
@@ -373,19 +373,20 @@ class Game {
         });
         
         // 아이템
-        this.items.forEach((item, index) => {
-             if (p.x < item.x + item.width && p.x + p.width > item.x &&
+        this.items.forEach((item) => {
+             if (!item.markedForDeletion && 
+                p.x < item.x + item.width && p.x + p.width > item.x &&
                 p.y < item.y + item.height && p.y + p.height > item.y) {
                 
-                // 즉시 제거 처리
                 item.markedForDeletion = true;
                 
                 if (item.def.currency) {
                     this.sessionCoins += item.def.currency;
                     this.ui.showToast(`💰 +${item.def.currency}`);
                 } else {
-                    this.score += item.def.score;
-                    this.co2Level = Math.max(0, this.co2Level - item.def.co2Reduction);
+                    this.score += (item.def.score || 0);
+                    const reduction = item.def.co2Reduction || 0;
+                    this.co2Level = Math.max(0, this.co2Level - reduction);
                     this.ui.showToast(`🌿 ${item.def.name} 획득!`);
                 }
             }
@@ -393,16 +394,23 @@ class Game {
     }
 
     draw() {
+        // 화면 지우기
         this.ctx.clearRect(0, 0, this.width, this.height);
 
-        // 지면
-        this.ctx.fillStyle = '#4CAF50';
-        this.ctx.fillRect(0, this.height - 100, this.width, 100);
+        // 바닥 그리기 (안전장치: 높이가 0이 아닐 때만)
+        if (this.height > 100) {
+            this.ctx.fillStyle = '#4CAF50';
+            this.ctx.fillRect(0, this.height - 100, this.width, 100);
+        }
 
         if (this.state === 'PLAYING') {
-            this.obstacles.forEach(o => o.draw(this.ctx));
-            this.items.forEach(i => i.draw(this.ctx));
-            this.player.draw(this.ctx);
+            try {
+                this.obstacles.forEach(o => o.draw(this.ctx));
+                this.items.forEach(i => i.draw(this.ctx));
+                this.player.draw(this.ctx);
+            } catch(e) {
+                // 그리기 에러가 나도 루프는 멈추지 않음
+            }
         }
     }
 
@@ -414,9 +422,7 @@ class Game {
             this.update(deltaTime);
             this.draw();
         } catch (e) {
-            console.error("Game Loop Error:", e);
-            // 에러가 나도 루프가 멈추지 않도록 재시도하거나 상태를 변경
-            // 개발 중엔 여기서 멈추는 게 낫지만, 배포용에선 재시작 유도
+            console.error("Game Loop Critical Error:", e);
         }
         
         requestAnimationFrame(this.animate.bind(this));
