@@ -3,70 +3,354 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>도시생물다양성지수(CBI) 시뮬레이터</title>
+    <title>CBI 도시생물다양성지수 시뮬레이터 (Full Ver.)</title>
     <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🌿 도시생물다양성지수(CBI) 계산기</h1>
-            <p>싱가포르 지수(Singapore Index) 기반 자가 진단 도구</p>
+            <h1>🌿 도시생물다양성지수(CBI) 통합 계산기</h1>
+            <p>싱가포르 지수(2021년 개정판) 28개 지표 시뮬레이션</p>
         </header>
 
-        <section id="city-profile">
-            <h2>1. 도시 개요 입력</h2>
-            <div class="input-group">
-                <label>도시 전체 면적 (ha):</label>
-                <input type="number" id="totalArea" placeholder="예: 10000">
-            </div>
-            <div class="input-group">
-                <label>도시 전체 인구 (명):</label>
-                <input type="number" id="population" placeholder="예: 500000">
+        <section id="city-profile" class="profile-section">
+            <h2>0. 도시 개요 (정규화 기준값)</h2>
+            <div class="grid-row">
+                <div class="input-group">
+                    <label>도시 전체 면적 (ha)</label>
+                    <input type="number" id="totalArea" placeholder="예: 10000">
+                </div>
+                <div class="input-group">
+                    <label>도시 전체 인구 (명)</label>
+                    <input type="number" id="population" placeholder="예: 500000">
+                </div>
+                <div class="input-group">
+                    <label>기준 연도 (과거 데이터 비교용)</label>
+                    <input type="number" id="baseYear" placeholder="예: 2010">
+                </div>
             </div>
         </section>
 
         <form id="cbi-form">
-            <section class="indicator-section">
-                <h3>PART I: 자생 생물다양성</h3>
-                <div class="indicator">
-                    [cite_start]<label><strong>지표 1. 자연지역 면적 (ha)</strong> [cite: 402]</label>
-                    <p class="desc">산림, 습지, 자연초지 등 자연생태계 면적의 합</p>
+            <section class="part-section">
+                <h3>PART I. 자생 생물다양성 (최대 36점)</h3>
+                
+                <div class="indicator-card">
+                    <h4>1. 자연지역 비율</h4>
+                    <p class="desc">도시 전체 면적 중 자연지역이 차지하는 비율</p>
+                    <label>자연지역 면적 합계 (ha):</label>
                     <input type="number" id="ind1_val" class="calc-input">
-                    <span class="score-display" id="ind1_score">0점</span>
+                    <div class="result-badge" id="ind1_score">0점</div>
                 </div>
-                </section>
 
-            <section class="indicator-section">
-                <h3>PART II: 생태계 서비스</h3>
-                <div class="indicator">
-                    [cite_start]<label><strong>지표 12. 1인당 여가 서비스 면적 (ha)</strong> [cite: 670]</label>
-                    <p class="desc">공원 및 자연지역 면적 합계 (인구 1,000명당)</p>
-                    <input type="number" id="ind12_val" class="calc-input">
-                    <span class="score-display" id="ind12_score">0점</span>
-                </div>
-            </section>
-
-            <section class="indicator-section">
-                <h3>PART III: 거버넌스 및 관리</h3>
-                <div class="indicator">
-                    [cite_start]<label><strong>지표 17. 생물다양성 전략 수립 여부</strong> [cite: 778]</label>
-                    <select id="ind17_val" class="calc-select">
-                        <option value="0">전략(LBSAP) 없음 (0점)</option>
-                        <option value="1">전략은 있으나 국가전략과 연계 안 됨 (1점)</option>
-                        <option value="2">국가전략 반영 + CBD 이니셔티브 1개 (2점)</option>
-                        <option value="3">국가전략 반영 + CBD 이니셔티브 2개 (3점)</option>
-                        <option value="4">국가전략 반영 + CBD 이니셔티브 3개 이상 (4점)</option>
+                <div class="indicator-card">
+                    <h4>2. 생태적 연결성</h4>
+                    <p class="desc">자연지역 간 연결 정도 (또는 파편화 방지 노력)</p>
+                    <select id="ind2_val" class="calc-select">
+                        <option value="0">연결성 고려 없음 (0점)</option>
+                        <option value="1">일부 연결되나 파편화 심함 (1점)</option>
+                        <option value="2">주요 거점 간 연결 시도 (2점)</option>
+                        <option value="3">생태축/네트워크 구축됨 (3점)</option>
+                        <option value="4">도시 전체가 유기적으로 연결됨 (4점)</option>
                     </select>
-                    <span class="score-display" id="ind17_score">0점</span>
+                    <div class="result-badge" id="ind2_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>3. 도시화 지역 내 자생 조류 종 수</h4>
+                    <p class="desc">시가화(Built-up) 지역에서 관찰되는 자생 조류 종 수</p>
+                    <label>관찰된 종 수 (개):</label>
+                    <input type="number" id="ind3_val" class="calc-input">
+                    <div class="result-badge" id="ind3_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>4. 자생 관속식물 종 수 변화</h4>
+                    <div class="grid-row">
+                        <label>과거 종 수: <input type="number" id="ind4_base"></label>
+                        <label>현재 종 수: <input type="number" id="ind4_curr"></label>
+                    </div>
+                    <div class="result-badge" id="ind4_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>5. 자생 조류 종 수 변화</h4>
+                    <div class="grid-row">
+                        <label>과거 종 수: <input type="number" id="ind5_base"></label>
+                        <label>현재 종 수: <input type="number" id="ind5_curr"></label>
+                    </div>
+                    <div class="result-badge" id="ind5_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>6. 자생 나비(절지동물) 종 수 변화</h4>
+                    <div class="grid-row">
+                        <label>과거 종 수: <input type="number" id="ind6_base"></label>
+                        <label>현재 종 수: <input type="number" id="ind6_curr"></label>
+                    </div>
+                    <div class="result-badge" id="ind6_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>7. 서식지 복원</h4>
+                    <p class="desc">복원된 서식지의 면적 또는 복원 사업의 성과</p>
+                    <select id="ind7_val" class="calc-select">
+                        <option value="0">복원 사업 없음 (0점)</option>
+                        <option value="1">계획 단계 또는 소규모 시범 (1점)</option>
+                        <option value="2">일부 지역 복원 진행 (2점)</option>
+                        <option value="3">상당한 면적 복원 완료 (3점)</option>
+                        <option value="4">도시 전체 자연성 회복 기여 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind7_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>8. 보호지역 비율</h4>
+                    <p class="desc">법적/행정적으로 보호받는 자연지역의 비율</p>
+                    <label>보호지역 면적 (ha):</label>
+                    <input type="number" id="ind8_val" class="calc-input">
+                    <div class="result-badge" id="ind8_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>9. 침입외래종 관리</h4>
+                    <p class="desc">침입외래종이 차지하는 비율 또는 관리 노력</p>
+                    <select id="ind9_val" class="calc-select">
+                        <option value="0">관리 안 함 / 데이터 없음 (0점)</option>
+                        <option value="1">현황 파악 단계 (1점)</option>
+                        <option value="2">일부 종 관리 중 (2점)</option>
+                        <option value="3">체계적 모니터링 및 제거 (3점)</option>
+                        <option value="4">침입종 효과적 통제 및 감소 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind9_score">0점</div>
                 </div>
             </section>
 
-            <button type="button" onclick="calculateTotal()">총점 계산하기</button>
+            <section class="part-section">
+                <h3>PART II. 생태계 서비스 (최대 20점)</h3>
+
+                <div class="indicator-card">
+                    <h4>10. 물 순환 조절 (투수층 비율)</h4>
+                    <p class="desc">도시 면적 중 투수지역(토양, 녹지, 투수포장 등) 비율</p>
+                    <label>투수지역 면적 (ha):</label>
+                    <input type="number" id="ind10_val" class="calc-input">
+                    <div class="result-badge" id="ind10_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>11. 기후 조절 (수관피복도)</h4>
+                    <p class="desc">나무와 식생이 하늘을 가리는 비율(Canopy Cover)</p>
+                    <label>수관 피복 면적 (ha):</label>
+                    <input type="number" id="ind11_val" class="calc-input">
+                    <div class="result-badge" id="ind11_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>12. 여가 서비스 (1인당 공원면적)</h4>
+                    <p class="desc">인구 1,000명당 이용 가능한 공원/자연지역 면적</p>
+                    <label>공원/자연지역 면적 (ha):</label>
+                    <input type="number" id="ind12_val" class="calc-input">
+                    <div class="result-badge" id="ind12_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>13. 건강과 웰빙 (접근성)</h4>
+                    <p class="desc">집에서 400m(도보 거리) 이내에 공원이 있는 인구 비율</p>
+                    <label>해당 인구 비율 (%):</label>
+                    <input type="number" id="ind13_val" class="calc-input" placeholder="0~100">
+                    <div class="result-badge" id="ind13_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>14. 식량 안보 (도시농업)</h4>
+                    <p class="desc">도시 내 농경지, 텃밭, 커뮤니티 가든 면적 비율</p>
+                    <label>농업/텃밭 면적 (ha):</label>
+                    <input type="number" id="ind14_val" class="calc-input">
+                    <div class="result-badge" id="ind14_score">0점</div>
+                </div>
+            </section>
+
+            <section class="part-section">
+                <h3>PART III. 거버넌스 및 관리 (최대 56점)</h3>
+                
+                <div class="indicator-card">
+                    <h4>15. 생물다양성 예산</h4>
+                    <p class="desc">도시 전체 예산 대비 생물다양성 관련 예산 비율</p>
+                    <select id="ind15_val" class="calc-select">
+                        <option value="0">관련 예산 없음 (0점)</option>
+                        <option value="1">0.1% 미만 (1점)</option>
+                        <option value="2">0.1% ~ 0.3% (2점)</option>
+                        <option value="3">0.4% ~ 2.0% (3점)</option>
+                        <option value="4">2.0% 이상 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind15_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>16. 생물다양성 프로젝트 수</h4>
+                    <p class="desc">매년 수행되는 생물다양성 관련 프로젝트/프로그램 수</p>
+                    <label>프로젝트 건수 (건):</label>
+                    <input type="number" id="ind16_val" class="calc-input">
+                    <div class="result-badge" id="ind16_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>17. 전략(LBSAP) 수립 여부</h4>
+                    <select id="ind17_val" class="calc-select">
+                        <option value="0">전략 없음 (0점)</option>
+                        <option value="1">계획 중이거나 미흡 (1점)</option>
+                        <option value="2">국가전략과 연계된 전략 보유 (2점)</option>
+                        <option value="3">전략 이행 및 모니터링 중 (3점)</option>
+                        <option value="4">전략의 효과적 이행 및 정기 평가 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind17_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>18. 제도적 역량 (전담 부서)</h4>
+                    <select id="ind18_val" class="calc-select">
+                        <option value="0">담당 부서 없음 (0점)</option>
+                        <option value="1">담당자 1인 또는 겸직 (1점)</option>
+                        <option value="2">전담 팀 존재 (2점)</option>
+                        <option value="3">전담 과/부서 존재 (3점)</option>
+                        <option value="4">생물다양성 위원회 및 총괄 부서 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind18_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>19. 부처 간 협력</h4>
+                    <select id="ind19_val" class="calc-select">
+                        <option value="0">협력 없음 (0점)</option>
+                        <option value="1">비공식적 협력 (1점)</option>
+                        <option value="2">공식 협의체 존재 (2점)</option>
+                        <option value="3">정기적 협력 회의 및 공동 사업 (3점)</option>
+                        <option value="4">통합적 의사결정 체계 구축 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind19_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>20. 전문가 자문</h4>
+                    <select id="ind20_val" class="calc-select">
+                        <option value="0">자문 절차 없음 (0점)</option>
+                        <option value="1">필요시 비정기 자문 (1점)</option>
+                        <option value="2">자문단 구성됨 (2점)</option>
+                        <option value="3">계획 수립 시 정기적 자문 (3점)</option>
+                        <option value="4">의사결정 전 과정에 전문가 참여 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind20_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>21. 파트너십 (NGO/기업/시민)</h4>
+                    <p class="desc">다양한 이해당사자와의 협력 활동 수</p>
+                    <label>협력 활동 건수 (건):</label>
+                    <input type="number" id="ind21_val" class="calc-input">
+                    <div class="result-badge" id="ind21_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>22. 정규 교육과정 통합</h4>
+                    <select id="ind22_val" class="calc-select">
+                        <option value="0">교육과정에 없음 (0점)</option>
+                        <option value="1">일부 학교에서 다룸 (1점)</option>
+                        <option value="2">방과후 프로그램 등 포함 (2점)</option>
+                        <option value="3">정규 커리큘럼에 포함 (3점)</option>
+                        <option value="4">전체 학교 대상 체계적 교육 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind22_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>23. 시민 인식증진 행사</h4>
+                    <label>연간 행사 횟수 (회):</label>
+                    <input type="number" id="ind23_val" class="calc-input">
+                    <div class="result-badge" id="ind23_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>24. 역량 강화 (공무원/전문가 교육)</h4>
+                    <select id="ind24_val" class="calc-select">
+                        <option value="0">교육 프로그램 없음 (0점)</option>
+                        <option value="1">비정기적 교육 (1점)</option>
+                        <option value="2">연 1회 이상 정기 교육 (2점)</option>
+                        <option value="3">심화 교육 프로그램 운영 (3점)</option>
+                        <option value="4">체계적 인재 양성 시스템 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind24_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>25. 국제 협력 및 네트워크</h4>
+                    <select id="ind25_val" class="calc-select">
+                        <option value="0">국제 활동 없음 (0점)</option>
+                        <option value="1">국제 회의 단순 참가 (1점)</option>
+                        <option value="2">국제 네트워크 가입 (2점)</option>
+                        <option value="3">국제 프로젝트 공동 수행 (3점)</option>
+                        <option value="4">국제 행사 주최 또는 리더십 발휘 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind25_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>26. 기술 및 혁신 활용 (Technology)</h4>
+                    <p class="desc">생물다양성 모니터링에 스마트 기술(GIS, AI 등) 활용</p>
+                    <select id="ind26_val" class="calc-select">
+                        <option value="0">기술 활용 없음 (0점)</option>
+                        <option value="1">기초적 데이터 전산화 (1점)</option>
+                        <option value="2">GIS 등 공간정보 활용 (2점)</option>
+                        <option value="3">시민과학 앱 또는 센서 활용 (3점)</option>
+                        <option value="4">첨단 기술 기반 실시간 모니터링 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind26_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>27. 녹색 일자리 및 경제</h4>
+                    <select id="ind27_val" class="calc-select">
+                        <option value="0">관련 정책 없음 (0점)</option>
+                        <option value="1">기초 조사 단계 (1점)</option>
+                        <option value="2">녹색 일자리 지원 사업 존재 (2점)</option>
+                        <option value="3">상당수의 녹색 일자리 창출 (3점)</option>
+                        <option value="4">녹색 경제 생태계 활성화 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind27_score">0점</div>
+                </div>
+
+                <div class="indicator-card">
+                    <h4>28. 보건 및 공중위생 (Health)</h4>
+                    <p class="desc">생태계를 활용한 보건 증진 프로그램 운영 여부</p>
+                    <select id="ind28_val" class="calc-select">
+                        <option value="0">프로그램 없음 (0점)</option>
+                        <option value="1">비정기적 숲치유 등 행사 (1점)</option>
+                        <option value="2">정기적 프로그램 존재 (2점)</option>
+                        <option value="3">보건소/병원과 연계 (3점)</option>
+                        <option value="4">도시 보건 정책에 통합 (4점)</option>
+                    </select>
+                    <div class="result-badge" id="ind28_score">0점</div>
+                </div>
+            </section>
+
+            <button type="button" class="calc-btn" onclick="calculateTotal()">🏆 최종 점수 확인하기</button>
         </form>
 
         <section id="result-area">
-            <h2>총점: <span id="total-score">0</span> / 112점</h2>
-            <p id="feedback-msg"></p>
+            <h2>종합 진단 결과</h2>
+            <div class="score-summary">
+                <div class="total-score-box">
+                    <span class="label">총점</span>
+                    <span class="score" id="total-score">0</span>
+                    <span class="max">/ 112점</span>
+                </div>
+                <div class="part-scores">
+                    <p>Part I (자생종): <span id="part1-score">0</span> / 36</p>
+                    <p>Part II (서비스): <span id="part2-score">0</span> / 20</p>
+                    <p>Part III (거버넌스): <span id="part3-score">0</span> / 56</p>
+                </div>
+            </div>
+            <p id="feedback-msg">데이터를 모두 입력하고 버튼을 눌러주세요.</p>
         </section>
     </div>
     <script src="js/script.js"></script>
