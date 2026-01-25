@@ -1,75 +1,139 @@
 body {
     font-family: 'Noto Sans KR', sans-serif;
-    background-color: #f4f9f4;
+    background-color: #f0f7f4;
     color: #333;
-    line-height: 1.6;
     margin: 0;
     padding: 20px;
 }
 
 .container {
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    background: #fff;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
 }
 
 header {
     text-align: center;
-    border-bottom: 2px solid #4CAF50;
-    margin-bottom: 20px;
+    margin-bottom: 40px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
 }
 
-h1 { color: #2E7D32; }
-h2 { color: #388E3C; margin-top: 0; }
-h3 { background-color: #E8F5E9; padding: 10px; border-left: 5px solid #4CAF50; }
+header h1 { color: #2E7D32; margin: 0; }
+header p { color: #666; margin-top: 10px; }
 
-.input-group, .indicator {
-    margin-bottom: 20px;
-    padding: 15px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
+h2 { font-size: 1.2em; color: #555; margin-bottom: 15px; }
+h3 {
+    background: #e8f5e9;
+    color: #2E7D32;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 40px;
+    border-left: 5px solid #2E7D32;
 }
 
-label { display: block; margin-bottom: 5px; font-weight: bold; }
-.desc { font-size: 0.9em; color: #666; margin-bottom: 10px; }
+/* 그리드 레이아웃 */
+.grid-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
 
-input[type="number"], select {
+.input-group { flex: 1; min-width: 200px; }
+.input-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
+.input-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+
+/* 지표 카드 스타일 */
+.indicator-card {
+    background: #fff;
+    border: 1px solid #eee;
+    padding: 20px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    position: relative;
+    transition: transform 0.2s;
+}
+
+.indicator-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+.indicator-card h4 { margin: 0 0 5px 0; color: #333; }
+.desc { font-size: 0.85em; color: #888; margin-bottom: 15px; }
+
+.calc-input, .calc-select {
     width: 100%;
     padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box; 
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 1em;
 }
 
-.score-display {
-    display: inline-block;
-    margin-top: 10px;
+/* 점수 뱃지 */
+.result-badge {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: #eee;
+    padding: 5px 15px;
+    border-radius: 20px;
     font-weight: bold;
-    color: #d32f2f;
+    font-size: 0.9em;
+    color: #999;
 }
 
-button {
+.result-badge.perfect { background: #2E7D32; color: #fff; }
+.result-badge.good { background: #66BB6A; color: #fff; }
+.result-badge.mid { background: #FFCA28; color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.1); }
+.result-badge.bad { background: #ef5350; color: #fff; }
+
+/* 버튼 */
+.calc-btn {
     width: 100%;
-    padding: 15px;
-    background-color: #4CAF50;
+    padding: 20px;
+    background: #2E7D32;
     color: white;
     border: none;
-    border-radius: 5px;
-    font-size: 1.2em;
+    border-radius: 10px;
+    font-size: 1.3em;
+    font-weight: bold;
     cursor: pointer;
-    margin-top: 20px;
+    margin-top: 40px;
+    transition: background 0.3s;
+}
+.calc-btn:hover { background: #1b5e20; }
+
+/* 결과 영역 */
+#result-area {
+    display: none;
+    margin-top: 40px;
+    background: #f1f8e9;
+    padding: 30px;
+    border-radius: 15px;
+    text-align: center;
+    border: 2px solid #c8e6c9;
 }
 
-button:hover { background-color: #45a049; }
+.score-summary {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    flex-wrap: wrap;
+}
 
-#result-area {
-    margin-top: 30px;
-    text-align: center;
-    padding: 20px;
-    background-color: #e8f5e9;
-    border-radius: 10px;
-    display: none; /* 계산 전에는 숨김 */
+.total-score-box .score {
+    font-size: 4em;
+    font-weight: bold;
+    color: #2E7D32;
+    display: block;
+    line-height: 1;
+}
+
+.part-scores p { font-size: 1.1em; margin: 5px 0; }
+.part-scores span { font-weight: bold; color: #1565C0; }
+
+@media (max-width: 600px) {
+    .grid-row { flex-direction: column; }
+    .score-summary { flex-direction: column; gap: 20px; }
 }
