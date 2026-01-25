@@ -1,9 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+
 body {
     font-family: 'Noto Sans KR', sans-serif;
     background-color: #f0f7f4;
     color: #333;
     margin: 0;
     padding: 20px;
+    /* 모바일 브라우저 하단바에 가려지지 않도록 전체 바디 여백 추가 */
+    padding-bottom: 100px;
 }
 
 .container {
@@ -13,6 +17,9 @@ body {
     padding: 40px;
     border-radius: 15px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    
+    /* [수정됨] 스크롤을 끝까지 내렸을 때 내용이 잘리지 않도록 하단 내부 여백 대폭 추가 */
+    padding-bottom: 200px;
 }
 
 header {
@@ -22,10 +29,23 @@ header {
     border-bottom: 2px solid #e0e0e0;
 }
 
-header h1 { color: #2E7D32; margin: 0; }
-header p { color: #666; margin-top: 10px; }
+header h1 { 
+    color: #2E7D32; 
+    margin: 0; 
+    font-size: 1.8em;
+}
 
-h2 { font-size: 1.2em; color: #555; margin-bottom: 15px; }
+header p { 
+    color: #666; 
+    margin-top: 10px; 
+}
+
+h2 { 
+    font-size: 1.2em; 
+    color: #555; 
+    margin-bottom: 15px; 
+}
+
 h3 {
     background: #e8f5e9;
     color: #2E7D32;
@@ -35,18 +55,35 @@ h3 {
     border-left: 5px solid #2E7D32;
 }
 
-/* 그리드 레이아웃 */
+/* 입력 폼 그리드 레이아웃 */
 .grid-row {
     display: flex;
     gap: 20px;
     flex-wrap: wrap;
+    margin-bottom: 10px;
 }
 
-.input-group { flex: 1; min-width: 200px; }
-.input-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
-.input-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+.input-group { 
+    flex: 1; 
+    min-width: 200px; 
+}
 
-/* 지표 카드 스타일 */
+.input-group label { 
+    display: block; 
+    font-weight: bold; 
+    margin-bottom: 5px; 
+    font-size: 0.9em; 
+}
+
+.input-group input { 
+    width: 100%; 
+    padding: 10px; 
+    border: 1px solid #ccc; 
+    border-radius: 5px; 
+    box-sizing: border-box; /* 패딩 포함 크기 계산 */
+}
+
+/* 지표 카드 스타일 (카드 UI) */
 .indicator-card {
     background: #fff;
     border: 1px solid #eee;
@@ -54,40 +91,66 @@ h3 {
     margin-bottom: 15px;
     border-radius: 8px;
     position: relative;
-    transition: transform 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.indicator-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-.indicator-card h4 { margin: 0 0 5px 0; color: #333; }
-.desc { font-size: 0.85em; color: #888; margin-bottom: 15px; }
+.indicator-card:hover { 
+    transform: translateY(-2px); 
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
+    border-color: #c8e6c9;
+}
+
+.indicator-card h4 { 
+    margin: 0 0 5px 0; 
+    color: #333; 
+    padding-right: 60px; /* 뱃지 공간 확보 */
+}
+
+.desc { 
+    font-size: 0.85em; 
+    color: #888; 
+    margin-bottom: 15px; 
+    line-height: 1.4;
+}
 
 .calc-input, .calc-select {
     width: 100%;
-    padding: 10px;
+    padding: 12px;
     border: 1px solid #ddd;
     border-radius: 5px;
     font-size: 1em;
+    background-color: #fafafa;
+    box-sizing: border-box;
 }
 
-/* 점수 뱃지 */
+.calc-input:focus, .calc-select:focus {
+    outline: none;
+    border-color: #2E7D32;
+    background-color: #fff;
+}
+
+/* 점수 뱃지 스타일 */
 .result-badge {
     position: absolute;
     top: 20px;
     right: 20px;
     background: #eee;
-    padding: 5px 15px;
+    padding: 5px 12px;
     border-radius: 20px;
     font-weight: bold;
-    font-size: 0.9em;
+    font-size: 0.85em;
     color: #999;
+    min-width: 30px;
+    text-align: center;
 }
 
-.result-badge.perfect { background: #2E7D32; color: #fff; }
-.result-badge.good { background: #66BB6A; color: #fff; }
-.result-badge.mid { background: #FFCA28; color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.1); }
-.result-badge.bad { background: #ef5350; color: #fff; }
+/* 점수에 따른 뱃지 색상 변화 */
+.result-badge.perfect { background: #2E7D32; color: #fff; } /* 4점 */
+.result-badge.good { background: #66BB6A; color: #fff; }    /* 3점 */
+.result-badge.mid { background: #FFCA28; color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.1); } /* 1~2점 */
+.result-badge.bad { background: #ef5350; color: #fff; }     /* 0점 */
 
-/* 버튼 */
+/* 계산 버튼 스타일 */
 .calc-btn {
     width: 100%;
     padding: 20px;
@@ -98,14 +161,22 @@ h3 {
     font-size: 1.3em;
     font-weight: bold;
     cursor: pointer;
-    margin-top: 40px;
-    transition: background 0.3s;
+    margin-top: 50px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: background 0.3s, transform 0.1s;
 }
-.calc-btn:hover { background: #1b5e20; }
 
-/* 결과 영역 */
+.calc-btn:hover { 
+    background: #1b5e20; 
+}
+
+.calc-btn:active {
+    transform: scale(0.98);
+}
+
+/* 결과 영역 스타일 */
 #result-area {
-    display: none;
+    display: none; /* 계산 전에는 숨김 */
     margin-top: 40px;
     background: #f1f8e9;
     padding: 30px;
@@ -114,26 +185,88 @@ h3 {
     border: 2px solid #c8e6c9;
 }
 
+#result-area h2 {
+    color: #2E7D32;
+    margin-top: 0;
+}
+
 .score-summary {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 40px;
     flex-wrap: wrap;
+    margin: 20px 0;
+}
+
+.total-score-box {
+    text-align: center;
+}
+
+.total-score-box .label {
+    display: block;
+    font-size: 1.1em;
+    color: #555;
+    margin-bottom: 5px;
 }
 
 .total-score-box .score {
     font-size: 4em;
-    font-weight: bold;
+    font-weight: 700;
     color: #2E7D32;
     display: block;
     line-height: 1;
 }
 
-.part-scores p { font-size: 1.1em; margin: 5px 0; }
-.part-scores span { font-weight: bold; color: #1565C0; }
+.total-score-box .max {
+    font-size: 1em;
+    color: #888;
+}
 
+.part-scores {
+    text-align: left;
+    background: rgba(255,255,255,0.6);
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.part-scores p { 
+    font-size: 1.1em; 
+    margin: 8px 0; 
+    color: #444;
+}
+
+.part-scores span { 
+    font-weight: bold; 
+    color: #1565C0; 
+    font-size: 1.2em;
+    margin-left: 5px;
+}
+
+#feedback-msg {
+    color: #666;
+    margin-top: 15px;
+}
+
+/* 모바일 반응형 처리 */
 @media (max-width: 600px) {
-    .grid-row { flex-direction: column; }
-    .score-summary { flex-direction: column; gap: 20px; }
+    .container {
+        padding: 20px;
+        padding-bottom: 150px; /* 모바일에서도 하단 여백 유지 */
+    }
+
+    .grid-row { 
+        flex-direction: column; 
+        gap: 10px;
+    }
+    
+    .score-summary { 
+        flex-direction: column; 
+        gap: 20px; 
+    }
+    
+    .part-scores {
+        width: 100%;
+        box-sizing: border-box;
+    }
 }
